@@ -201,7 +201,10 @@ All trades and periodic portfolio snapshots are automatically saved to CSV files
 You can configure the snapshot interval and output directory:
 
 ```bash
-uv run python tools_and_dashboard.py --bootstrap-servers <broker-url> --snapshot-interval 60 --data-dir ./data
+uv run python tools_and_dashboard.py \
+    --bootstrap-servers <broker-url> \
+    --snapshot-interval <default-600-seconds> \
+    --data-dir ./data
 ```
 
 To disable recording entirely, pass `--snapshot-interval 0`.
