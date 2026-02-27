@@ -16,6 +16,7 @@ from trading_tools import (
     execute_trade,
     get_portfolio,
     price_book,
+    store,
     view,
 )
 
@@ -42,6 +43,18 @@ def parse_args():
         "--bootstrap-servers",
         required=True,
         help="Kafka bootstrap servers address",
+    )
+    parser.add_argument(
+        "--snapshot-interval",
+        type=float,
+        default=600.0,
+        help="Seconds between portfolio snapshots (0 disables recording)",
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default="./data",
+        help="Output directory for CSV data files",
     )
     return parser.parse_args()
 
@@ -75,11 +88,26 @@ async def main():
         price_book.update(ticker.model_dump())
         view.rerender()
 
+    # ── Data recorder (optional) ────────────────────────────────
+    recorder = None
+    if args.snapshot_interval > 0:
+        from data_recorder import DataRecorder
+
+        recorder = DataRecorder(data_dir=args.data_dir)
+        store.attach_recorder(recorder)
+        print(f"\nCSV recording enabled → {args.data_dir}/ (snapshots every {args.snapshot_interval}s)")
+
     print("\nStarting portfolio dashboard (prices via Kafka)...")
 
-    with Live(view._build_layout(), auto_refresh=False, screen=True) as live:
-        view.attach_live(live)
-        await service.run()
+    try:
+        with Live(view._build_layout(), auto_refresh=False, screen=True) as live:
+            view.attach_live(live)
+            if recorder is not None:
+                recorder.start_snapshot_loop(store, interval=args.snapshot_interval)
+            await service.run()
+    finally:
+        if recorder is not None:
+            await recorder.close()
 
 
 if __name__ == "__main__":

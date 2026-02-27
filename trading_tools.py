@@ -94,6 +94,23 @@ class AgentAccount:
         return self.cost_basis.get(product_id, 0.0) / qty
 
 
+# ── Trade recorder protocol ──────────────────────────────────────
+
+
+class TradeRecorder(typing.Protocol):
+    def record_trade(
+        self,
+        *,
+        agent_id: str,
+        action: str,
+        product_id: str,
+        quantity: float,
+        price: float,
+        cash_after: float,
+        latency: float | None,
+    ) -> None: ...
+
+
 # ── Account store ────────────────────────────────────────────────
 
 
@@ -104,6 +121,10 @@ class AccountStore:
         self._accounts: dict[str, AgentAccount] = {}
         self._trade_log: list[tuple[str, str, str, str, float, float, float | None]] = []
         self._price_book = price_book
+        self._data_recorder: TradeRecorder | None = None
+
+    def attach_recorder(self, recorder: TradeRecorder) -> None:
+        self._data_recorder = recorder
 
     def get_or_create(self, agent_id: str) -> AgentAccount:
         if agent_id not in self._accounts:
@@ -224,6 +245,18 @@ class AccountStore:
     ) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
         self._trade_log.append((ts, agent_id, action, product_id, quantity, price, latency))
+
+        if self._data_recorder is not None:
+            account = self._accounts.get(agent_id)
+            self._data_recorder.record_trade(
+                agent_id=agent_id,
+                action=action,
+                product_id=product_id,
+                quantity=quantity,
+                price=price,
+                cash_after=account.cash if account else 0.0,
+                latency=latency,
+            )
 
 
 # ── Rich Live view ───────────────────────────────────────────────
