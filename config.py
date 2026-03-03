@@ -57,6 +57,7 @@ class ChatNodeConfig(BaseModel):
 class TradingConfig(BaseModel):
     """Trading-related configuration."""
 
+    exchange: str = "coinbase"
     binance_symbols: list[str] = Field(default_factory=lambda: DEFAULT_BINANCE_SYMBOLS.copy())
     coinbase_products: list[str] = Field(default_factory=lambda: DEFAULT_COINBASE_PRODUCTS.copy())
 

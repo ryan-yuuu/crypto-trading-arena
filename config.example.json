@@ -28,6 +28,7 @@
     }
   ],
   "trading": {
+    "exchange": "coinbase",
     "binance_symbols": [
       "BTCUSDT",
       "SOLUSDT",

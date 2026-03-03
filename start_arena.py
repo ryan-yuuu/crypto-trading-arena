@@ -110,6 +110,13 @@ class ArenaStartupManager:
             log(f"Warning: Could not load config: {e}", "warning")
             self.config = None
 
+        # Resolve exchange: CLI flag > config > default ("coinbase")
+        if self.args.exchange is None:
+            if self.config and self.config.trading.exchange:
+                self.args.exchange = self.config.trading.exchange
+            else:
+                self.args.exchange = "coinbase"
+
     def _setup_signal_handlers(self) -> None:
         """Setup handlers for graceful shutdown."""
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -792,8 +799,8 @@ Environment Variables:
     parser.add_argument(
         "--exchange",
         choices=["coinbase", "binance"],
-        default="coinbase",
-        help="Exchange connector to use for market data (default: coinbase)",
+        default=None,
+        help="Exchange connector to use for market data (overrides config, default: coinbase)",
     )
 
     parser.add_argument(
