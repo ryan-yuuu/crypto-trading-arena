@@ -26,24 +26,23 @@ Environment Variables:
 from __future__ import annotations
 
 import argparse
-import asyncio
-import json
 import os
 import signal
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from config import load_config, ArenaConfig, ChatNodeConfig
+from config import load_config, ArenaConfig
 
 # ANSI colors for terminal output
 COLORS = {
     "reset": "\033[0m",
     "bold": "\033[1m",
+    "dim": "\033[90m",
     "red": "\033[91m",
     "green": "\033[92m",
     "yellow": "\033[93m",
@@ -74,12 +73,6 @@ def log(message: str, level: str = "info") -> None:
         print(f"{COLORS['dim']}{prefix}{COLORS['reset']} {color}{message}{COLORS['reset']}")
 
 
-# Add dim to colors
-def _init():
-    COLORS["dim"] = "\033[90m"
-_init()
-
-
 @dataclass
 class ComponentStatus:
     """Track status of a running component."""
@@ -97,12 +90,13 @@ class ArenaStartupManager:
 
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
-        self.broker_url = args.broker_url or os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+        self.broker_url = args.cloud_broker or args.broker_url or os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
         self.api_key = args.api_key or os.getenv("OPENAI_API_KEY", "")
         self.components: Dict[str, ComponentStatus] = {}
         self.logs_dir = Path("logs")
         self.broker_dir = Path("../calfkit-broker")
         self.running = True
+        self._shutting_down = False
         self.config: Optional[ArenaConfig] = None
         self._load_config()
         self._setup_signal_handlers()
@@ -123,6 +117,9 @@ class ArenaStartupManager:
 
     def _signal_handler(self, signum, frame) -> None:
         """Handle shutdown signals gracefully."""
+        if self._shutting_down:
+            return
+        self._shutting_down = True
         signal_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
         log(f"\nReceived {signal_name}, shutting down gracefully...", "warning")
         self.running = False
@@ -164,20 +161,23 @@ class ArenaStartupManager:
             log("  curl -LsSf https://astral.sh/uv/install.sh | sh", "debug")
             all_good = False
 
-        # Check Docker
-        if self._check_command(["docker", "--version"]):
-            result = subprocess.run(["docker", "--version"], capture_output=True, text=True)
-            log(f"Docker found: {result.stdout.strip()}", "success")
+        # Check Docker (only needed for local broker)
+        if not self.args.cloud_broker:
+            if self._check_command(["docker", "--version"]):
+                result = subprocess.run(["docker", "--version"], capture_output=True, text=True)
+                log(f"Docker found: {result.stdout.strip()}", "success")
 
-            # Check Docker is running
-            if self._check_command(["docker", "info"]):
-                log("Docker daemon is running", "success")
+                # Check Docker is running
+                if self._check_command(["docker", "info"]):
+                    log("Docker daemon is running", "success")
+                else:
+                    log("Docker daemon is not running. Please start Docker.", "error")
+                    all_good = False
             else:
-                log("Docker daemon is not running. Please start Docker.", "error")
+                log("Docker not found. Install from https://docs.docker.com/", "error")
                 all_good = False
         else:
-            log("Docker not found. Install from https://docs.docker.com/", "error")
-            all_good = False
+            log("Using cloud broker, skipping Docker check", "info")
 
         # Check API key
         if self.api_key:
@@ -462,14 +462,15 @@ class ArenaStartupManager:
                 "--name", chat_node_name,
                 "--model-id", model_id,
                 "--bootstrap-servers", self.broker_url,
-                "--api-key", self.api_key,
                 "--config-path", self.args.config,
             ]
 
             if self.args.reasoning_effort:
                 cmd.extend(["--reasoning-effort", self.args.reasoning_effort])
 
-            if self._start_component("chat-node", cmd):
+            # Pass API key via environment variable, not CLI arg (avoids ps exposure)
+            env = {"OPENAI_API_KEY": self.api_key} if self.api_key else None
+            if self._start_component("chat-node", cmd, env=env):
                 started_nodes.append(chat_node_name)
 
         return started_nodes

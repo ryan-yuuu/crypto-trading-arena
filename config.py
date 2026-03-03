@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 DEFAULT_CONFIG_PATH = Path("config.json")
 
@@ -21,18 +21,17 @@ DEFAULT_BINANCE_SYMBOLS = ["BTCUSDT", "FARTCOINUSDT", "SOLUSDT"]
 DEFAULT_COINBASE_PRODUCTS = ["BTC-USD", "FARTCOIN-USD", "SOL-USD"]
 
 # Provider default endpoints
+# NOTE: The "anthropic" provider is listed for documentation purposes, but the
+# Anthropic API is NOT OpenAI-compatible. To use Claude models, configure them
+# via "openrouter" or another OpenAI-compatible proxy instead.
 PROVIDER_DEFAULTS = {
     "openai": {
         "base_url": "https://api.openai.com/v1",
         "default_model": "gpt-4o-mini",
     },
-    "anthropic": {
-        "base_url": "https://api.anthropic.com/v1",
-        "default_model": "claude-3-sonnet-20240229",
-    },
     "openrouter": {
         "base_url": "https://openrouter.ai/api/v1",
-        "default_model": "anthropic/claude-3.5-sonnet",
+        "default_model": "anthropic/claude-sonnet-4",
     },
 }
 
@@ -43,21 +42,6 @@ class LLMProviderConfig(BaseModel):
     api_key: str = ""
     base_url: str = ""
     default_model: str = ""
-
-    @field_validator("api_key")
-    @classmethod
-    def resolve_api_key(cls, v: str) -> str:
-        """Resolve API key from env var if it uses ${VAR_NAME} syntax."""
-        if not v:
-            return v
-        match = re.match(r'^\$\{([^}]+)\}$', v)
-        if match:
-            env_var = match.group(1)
-            env_value = os.getenv(env_var, "")
-            if not env_value:
-                raise ValueError(f"Environment variable {env_var} is not set")
-            return env_value
-        return v
 
 
 class ChatNodeConfig(BaseModel):
@@ -125,6 +109,7 @@ def resolve_env_vars(value: Any, path: str = "root") -> Any:
     elif isinstance(value, list):
         return [resolve_env_vars(item, f"{path}[{i}]") for i, item in enumerate(value)]
     return value
+
 
 def load_config(config_path: Path | str | None = None) -> ArenaConfig:
     """Load configuration from a file.

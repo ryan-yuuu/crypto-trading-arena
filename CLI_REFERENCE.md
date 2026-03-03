@@ -3,9 +3,16 @@
 ## Configuration File
 
 The trading arena supports a JSON configuration file (`config.json` by default) for managing:
-- Multiple LLM providers (OpenAI, Anthropic, OpenRouter)
+- Multiple LLM providers (OpenAI, OpenRouter)
 - Multiple ChatNodes with different providers/models
 - Trading pairs for Binance and Coinbase
+
+To get started, copy the example and fill in your API keys:
+```bash
+cp config.example.json config.json
+```
+
+> **Note:** `config.json` is gitignored to prevent accidental secret commits.
 
 **Example config.json:**
 ```json
@@ -16,10 +23,10 @@ The trading arena supports a JSON configuration file (`config.json` by default) 
       "base_url": "https://api.openai.com/v1",
       "default_model": "gpt-4o-mini"
     },
-    "anthropic": {
-      "api_key": "${ANTHROPIC_API_KEY}",
-      "base_url": "https://api.anthropic.com/v1",
-      "default_model": "claude-3-sonnet-20240229"
+    "openrouter": {
+      "api_key": "${OPENROUTER_API_KEY}",
+      "base_url": "https://openrouter.ai/api/v1",
+      "default_model": "anthropic/claude-sonnet-4"
     }
   },
   "chat_nodes": [
@@ -31,8 +38,8 @@ The trading arena supports a JSON configuration file (`config.json` by default) 
     },
     {
       "name": "claude",
-      "provider": "anthropic",
-      "model": "claude-3-opus-20240229",
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-4",
       "max_workers": 1
     }
   ],
@@ -43,6 +50,8 @@ The trading arena supports a JSON configuration file (`config.json` by default) 
 }
 ```
 
+> **Note:** The Anthropic API is not OpenAI-compatible. To use Claude models, configure them via the `openrouter` provider or another OpenAI-compatible proxy.
+
 **API Key Formats:**
 - Environment variable: `"${OPENAI_API_KEY}"` - Reads from env var at runtime
 - Embedded key: `"sk-..."` - Key embedded directly in config (less secure)
@@ -51,7 +60,7 @@ The trading arena supports a JSON configuration file (`config.json` by default) 
 
 ## start_arena.py / start_arena.sh
 
-Automated startup scripts that launch all components in the correct order.
+Automated startup that launches all components in the correct order. `start_arena.sh` is a thin wrapper around `start_arena.py`.
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
@@ -118,9 +127,9 @@ uv run python deploy_chat_node.py \
     --from-config gpt4o \
     --bootstrap-servers localhost:9092
 
-# Using OpenRouter
+# Using OpenRouter (for Claude and other non-OpenAI models)
 uv run python deploy_chat_node.py \
-    --name claude --model-id anthropic/claude-3.5-sonnet \
+    --name claude --model-id anthropic/claude-sonnet-4 \
     --base-url https://openrouter.ai/api/v1 \
     --api-key $OPENROUTER_API_KEY \
     --bootstrap-servers localhost:9092
