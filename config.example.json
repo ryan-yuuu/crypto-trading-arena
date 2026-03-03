@@ -1,4 +1,5 @@
 {
+  "$schema": "./config.schema.json",
   "_comment": "Copy this file to config.json and fill in your API keys. Use ${ENV_VAR} syntax to reference environment variables, or embed keys directly.",
   "llm_providers": {
     "openai": {
