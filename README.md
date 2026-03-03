@@ -141,6 +141,8 @@ uv run python start_arena.py --api-key sk-... --model-id gpt-4o
 
 Press `Ctrl+C` to gracefully stop all components.
 
+<br>
+
 ---
 
 ## Quickstart (Manual)
