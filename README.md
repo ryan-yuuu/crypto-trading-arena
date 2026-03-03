@@ -255,7 +255,7 @@ For full column descriptions and examples, see [docs/csv-data-recording.md](docs
 
 ## CLI Reference
 
-For full CLI flags and options, see [CLI_REFERENCE.md](CLI_REFERENCE.md).
+For full CLI flags and options, see [CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
 
 <br>
 
