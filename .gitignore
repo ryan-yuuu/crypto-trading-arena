@@ -208,3 +208,6 @@ __marimo__/
 
 # Data recorder CSV output
 data/
+
+# User config (may contain API keys)
+config.json
