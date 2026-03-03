@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr view:*)"
+    ]
+  }
+}
