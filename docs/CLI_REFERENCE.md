@@ -44,6 +44,7 @@ cp config.example.json config.json
     }
   ],
   "trading": {
+    "exchange": "coinbase",
     "binance_symbols": ["BTCUSDT", "SOLUSDT", "FARTCOINUSDT"],
     "coinbase_products": ["BTC-USD", "SOL-USD", "FARTCOIN-USD"]
   }
@@ -70,6 +71,7 @@ Automated startup that launches all components in the correct order. `start_aren
 | `--api-key` | No | `$OPENAI_API_KEY` | API key for LLM provider (legacy mode) |
 | `--model-id` | No | `gpt-4o-mini` | Model ID for ChatNode (legacy mode) |
 | `--reasoning-effort` | No | — | Reasoning level: `low`, `medium`, `high` |
+| `--exchange` | No | `coinbase` | Exchange connector: `coinbase` or `binance` (overrides config) |
 | `--interval` | No | `60` | Market data update interval in seconds |
 | `--with-viewer` | No | — | Also start the response viewer |
 | `--skip-checks` | No | — | Skip prerequisite checks |
@@ -83,6 +85,9 @@ uv run python start_arena.py
 
 # Use custom config file
 uv run python start_arena.py --config my-config.json
+
+# Use Binance instead of Coinbase
+uv run python start_arena.py --exchange binance
 
 # Use cloud broker with custom model
 uv run python start_arena.py --cloud-broker broker.example.com:9092
