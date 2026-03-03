@@ -407,7 +407,8 @@ async def run(args: argparse.Namespace, router_node: AgentRouterNode) -> None:
         try:
             config = load_config(args.config)
             symbols = config.trading.binance_symbols
-        except Exception:
+        except Exception as e:
+            logger.debug("Config not loaded, using default symbols: %s", e)
             symbols = list(DEFAULT_SYMBOLS)
 
     candle_book = CandleBook()

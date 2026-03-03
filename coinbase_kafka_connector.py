@@ -305,7 +305,8 @@ async def run(args: argparse.Namespace, router_node: AgentRouterNode) -> None:
         try:
             config = load_config(args.config)
             products = config.trading.coinbase_products
-        except Exception:
+        except Exception as e:
+            logger.debug("Config not loaded, using default products: %s", e)
             products = list(DEFAULT_PRODUCTS)
 
     broker = BrokerClient(bootstrap_servers=args.bootstrap_servers)

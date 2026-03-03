@@ -6,7 +6,7 @@ Automatically starts all components of the Agents Trading Arena in the correct o
 1. Prerequisites check (Docker, Python, uv)
 2. Kafka broker (auto-clones calfkit-broker if needed)
 3. Dependencies installation (uv sync)
-4. Coinbase connector (market data)
+4. Exchange connector (Coinbase or Binance market data)
 5. Tools & dashboard (trading engine + UI)
 6. ChatNode (LLM inference)
 7. Agent routers (3 default strategies: momentum, brainrot, scalper)
@@ -14,7 +14,7 @@ Automatically starts all components of the Agents Trading Arena in the correct o
 
 Usage:
     uv run python start_arena.py
-    uv run python start_arena.py --broker-url localhost:9092
+    uv run python start_arena.py --exchange binance
     uv run python start_arena.py --cloud-broker <cloud-url>
     uv run python start_arena.py --with-viewer
 
@@ -379,20 +379,28 @@ class ArenaStartupManager:
             )
             return False
 
-    def start_coinbase_connector(self) -> bool:
-        """Start the Coinbase market data connector."""
-        log("Starting Coinbase Connector", "header")
+    def start_exchange_connector(self) -> bool:
+        """Start the selected exchange market data connector."""
+        exchange = self.args.exchange
+        log(f"Starting {exchange.capitalize()} Connector", "header")
 
-        cmd = [
-            "uv", "run", "python", "coinbase_kafka_connector.py",
-            "--bootstrap-servers", self.broker_url,
-            "--config", self.args.config,
-        ]
+        if exchange == "binance":
+            cmd = [
+                "uv", "run", "python", "binance_kafka_connector.py",
+                "--bootstrap-servers", self.broker_url,
+                "--config", self.args.config,
+            ]
+        else:
+            cmd = [
+                "uv", "run", "python", "coinbase_kafka_connector.py",
+                "--bootstrap-servers", self.broker_url,
+                "--config", self.args.config,
+            ]
 
         if self.args.interval:
             cmd.extend(["--min-interval", str(self.args.interval)])
 
-        return self._start_component("coinbase-connector", cmd)
+        return self._start_component(f"{exchange}-connector", cmd)
 
     def start_tools_dashboard(self) -> bool:
         """Start the tools and dashboard."""
@@ -585,7 +593,7 @@ class ArenaStartupManager:
             "agent-scalper-trader",
             "response-viewer",
             "tools-dashboard",
-            "coinbase-connector",
+            f"{self.args.exchange}-connector",
             "broker",
         ]
 
@@ -680,8 +688,8 @@ class ArenaStartupManager:
         # Phase 5: Core Components
         time.sleep(2)  # Wait for broker to be fully ready
 
-        if not self.start_coinbase_connector():
-            log("Failed to start Coinbase connector", "error")
+        if not self.start_exchange_connector():
+            log(f"Failed to start {self.args.exchange.capitalize()} connector", "error")
             if not self.args.continue_on_error:
                 self.shutdown()
                 return 1
@@ -779,6 +787,13 @@ Environment Variables:
         "--reasoning-effort",
         choices=["low", "medium", "high"],
         help="Reasoning effort for supported models",
+    )
+
+    parser.add_argument(
+        "--exchange",
+        choices=["coinbase", "binance"],
+        default="coinbase",
+        help="Exchange connector to use for market data (default: coinbase)",
     )
 
     parser.add_argument(
