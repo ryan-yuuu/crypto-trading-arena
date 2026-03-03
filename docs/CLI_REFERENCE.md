@@ -5,7 +5,7 @@
 The trading arena supports a JSON configuration file (`config.json` by default) for managing:
 - Multiple LLM providers (OpenAI, OpenRouter)
 - Multiple ChatNodes with different providers/models
-- Trading pairs for Binance and Coinbase
+- Exchange selection and trading pairs for Binance and Coinbase
 
 To get started, copy the example and fill in your API keys:
 ```bash
@@ -14,9 +14,12 @@ cp config.example.json config.json
 
 > **Note:** `config.json` is gitignored to prevent accidental secret commits.
 
+For the full config schema with all fields, types, and defaults, see [`config.schema.json`](../config.schema.json). IDEs that support JSON Schema (VS Code, JetBrains) will provide autocompletion and validation automatically via the `$schema` reference in the config file.
+
 **Example config.json:**
 ```json
 {
+  "$schema": "./config.schema.json",
   "llm_providers": {
     "openai": {
       "api_key": "${OPENAI_API_KEY}",
