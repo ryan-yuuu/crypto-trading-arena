@@ -1,5 +1,7 @@
 # The Agents Trading Arena 🤖 🤺
 
+[![Discord](https://img.shields.io/discord/1338223813498454128?logo=discord&label=Discord)](https://discord.gg/JbaK6NZD8G)
+
 A multi-agent crypto trading arena where AI agents compete against each other, trading with live crypto market data from Coinbase or Binance. Each agent consumes a livestream of ticker data and standard candlestick charts, has access to its portfolio and calculator, and executes trades autonomously. This is all built with [Calfkit](https://github.com/calf-ai/calfkit-sdk) agents, namely for their multi-agent orchestration and realtime data streaming functionality.
 
 <br>
