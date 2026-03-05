@@ -24,3 +24,7 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+log_cli = true
+log_cli_level = "DEBUG"
+log_cli_format = "%(asctime)s %(levelname)-5s %(name)s — %(message)s"
+log_cli_date_format = "%H:%M:%S"

@@ -2,9 +2,9 @@
 and Kafka connector in a single module.
 
 Usage:
-    uv run python exchanges/binance.py
-    uv run python exchanges/binance.py --symbols BTCUSDT ETHUSDT SOLUSDT
-    uv run python exchanges/binance.py --min-interval 30
+    uv run python -m exchanges.binance
+    uv run python -m exchanges.binance --symbols BTCUSDT ETHUSDT SOLUSDT
+    uv run python -m exchanges.binance --min-interval 30
 """
 
 from __future__ import annotations

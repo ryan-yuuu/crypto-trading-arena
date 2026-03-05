@@ -2,9 +2,9 @@
 and Kafka connector in a single module.
 
 Usage:
-    uv run python exchanges/coinbase.py
-    uv run python exchanges/coinbase.py --products BTC-USD ETH-USD SOL-USD
-    uv run python exchanges/coinbase.py --min-interval 30
+    uv run python -m exchanges.coinbase
+    uv run python -m exchanges.coinbase --products BTC-USD ETH-USD SOL-USD
+    uv run python -m exchanges.coinbase --min-interval 30
 """
 
 import argparse
