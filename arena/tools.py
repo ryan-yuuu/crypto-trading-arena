@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from datetime import datetime
@@ -14,6 +15,8 @@ from calfkit.nodes.base_tool_node import agent_tool
 from arena.account_store import AccountStore
 from arena.dashboard import PortfolioView
 from arena.price_book import PriceBook
+
+log = logging.getLogger(__name__)
 
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 
