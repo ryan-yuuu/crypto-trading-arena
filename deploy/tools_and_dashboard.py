@@ -19,7 +19,7 @@ from arena.tools import (
     store,
     view,
 )
-from config import load_config
+from config import load_config_strict
 
 # Tools & Price Feed — Deploys trading tool workers and subscribes
 # to the Kafka price topic published by the connector.
@@ -80,17 +80,8 @@ async def main():
 
     # Resolve the taker fee from config — the single source of truth shared with
     # the price-feed connector, so the fee charged here always matches the fee the
-    # connector advertises to agents. load_config returns defaults when config.json
-    # is absent; if it raises, the file exists but is invalid — fail loud rather than
-    # silently charging the wrong fee.
-    try:
-        taker_bps = load_config(args.config).trading.fees.taker_bps
-    except Exception:
-        logging.getLogger(__name__).error(
-            "Failed to load fee config from %s; refusing to start with an unknown fee "
-            "rate. Fix the config, or remove it to use defaults.", args.config,
-        )
-        raise
+    # connector advertises to agents.
+    taker_bps = load_config_strict(args.config).trading.fees.taker_bps
     store.set_fee_model(FeeModel(taker_bps=taker_bps))
     print(f"Trading fee: {taker_bps} bps ({taker_bps / 100:.2f}% taker) applied to every fill")
 

@@ -66,3 +66,14 @@ class FeeModel:
         """
         fee = notional * self.taker_rate
         return Fill(notional - fee, fee)
+
+    def disclosure_prompt(self) -> str:
+        """Agent-facing description of the fee, injected into the ticker prompt."""
+        if self.taker_bps == 0:
+            return "Trading is fee-free in this deployment."
+        return (
+            f"A taker fee of {self.taker_bps} bps "
+            f"({self.taker_bps / 100:.2f}%) is charged on every fill "
+            "(both buys and sells). Factor this into your sizing and P&L targets — "
+            f"a round-trip costs {2 * self.taker_bps} bps."
+        )

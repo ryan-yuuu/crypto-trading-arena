@@ -356,6 +356,13 @@ def test_fee_model_rejects_out_of_range_bps():
         FeeModel(taker_bps=MAX_TAKER_BPS + 1)
 
 
+def test_fee_model_disclosure_prompt():
+    """The agent-facing disclosure reports the rate and round-trip cost, or fee-free at 0."""
+    line = FeeModel(taker_bps=60).disclosure_prompt()
+    assert "60 bps" in line and "0.60%" in line and "120 bps" in line  # round trip = 2x
+    assert FeeModel(taker_bps=0).disclosure_prompt() == "Trading is fee-free in this deployment."
+
+
 # ── Tests ───────────────────────────────────────────────────────
 
 

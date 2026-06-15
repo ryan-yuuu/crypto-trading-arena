@@ -7,6 +7,7 @@ API keys can be embedded directly or referenced via env vars using ${VAR_NAME} s
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -186,6 +187,26 @@ def load_config(config_path: Path | str | None = None) -> ArenaConfig:
     data = resolve_env_vars(data)
 
     return ArenaConfig.model_validate(data)
+
+
+def load_config_strict(config_path: Path | str | None = None) -> ArenaConfig:
+    """Load configuration, failing loud on an invalid file.
+
+    `load_config` already returns defaults when the file is absent, so any
+    exception here means the file exists but is broken (bad JSON, an unset
+    `${ENV_VAR}` reference, or an out-of-range value). A wrong fee rate would
+    invalidate the whole run and silently desync the fee charged on fills from
+    the fee advertised to agents, so log at ERROR and re-raise rather than
+    guessing a default. Used by the deploy entrypoints that resolve the fee.
+    """
+    try:
+        return load_config(config_path)
+    except Exception:
+        logging.getLogger(__name__).error(
+            "Failed to load config from %s; refusing to start with an unknown fee "
+            "rate. Fix the config, or remove it to use defaults.", config_path,
+        )
+        raise
 
 
 def get_default_symbols(exchange: str = "binance") -> list[str]:
