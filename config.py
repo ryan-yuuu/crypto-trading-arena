@@ -7,6 +7,7 @@ API keys can be embedded directly or referenced via env vars using ${VAR_NAME} s
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -15,6 +16,8 @@ from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+from arena.fees import DEFAULT_TAKER_BPS, MAX_TAKER_BPS
 
 DEFAULT_CONFIG_PATH = Path("config.json")
 
@@ -59,6 +62,22 @@ class AgentConfig(BaseModel):
     strategy: str = Field("default", description="Trading strategy (selects system prompt).")
 
 
+class FeeConfig(BaseModel):
+    """Trading fee configuration. All simulated fills cross the spread, so only
+    the taker rate is applied. Expressed in basis points (1 bps = 0.01%).
+
+    Default 60 bps matches Coinbase Advanced Trade's base-tier taker rate. Set to
+    10 for Binance global (VIP 0), 40 for Kraken Pro, or 0 to disable.
+    """
+
+    taker_bps: int = Field(
+        DEFAULT_TAKER_BPS,
+        description="Taker fee in basis points (60 bps = 0.60%). 0 disables fees.",
+        ge=0,
+        le=MAX_TAKER_BPS,
+    )
+
+
 class TradingConfig(BaseModel):
     """Trading-related configuration."""
 
@@ -72,6 +91,10 @@ class TradingConfig(BaseModel):
     coinbase_products: list[str] = Field(
         default_factory=lambda: DEFAULT_COINBASE_PRODUCTS.copy(),
         description="Coinbase product IDs to subscribe to.",
+    )
+    fees: FeeConfig = Field(
+        default_factory=FeeConfig,
+        description="Trading fees applied to every simulated fill.",
     )
 
 
@@ -164,6 +187,26 @@ def load_config(config_path: Path | str | None = None) -> ArenaConfig:
     data = resolve_env_vars(data)
 
     return ArenaConfig.model_validate(data)
+
+
+def load_config_strict(config_path: Path | str | None = None) -> ArenaConfig:
+    """Load configuration, failing loud on an invalid file.
+
+    `load_config` already returns defaults when the file is absent, so any
+    exception here means the file exists but is broken (bad JSON, an unset
+    `${ENV_VAR}` reference, or an out-of-range value). A wrong fee rate would
+    invalidate the whole run and silently desync the fee charged on fills from
+    the fee advertised to agents, so log at ERROR and re-raise rather than
+    guessing a default. Used by the deploy entrypoints that resolve the fee.
+    """
+    try:
+        return load_config(config_path)
+    except Exception:
+        logging.getLogger(__name__).error(
+            "Failed to load config from %s; refusing to start with an unknown fee "
+            "rate. Fix the config, or remove it to use defaults.", config_path,
+        )
+        raise
 
 
 def get_default_symbols(exchange: str = "binance") -> list[str]:

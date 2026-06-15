@@ -41,6 +41,10 @@
       "BTC-USD",
       "SOL-USD",
       "FARTCOIN-USD"
-    ]
+    ],
+    "fees": {
+      "_comment": "Taker fee in basis points (1 bps = 0.01%). 60 = Coinbase Advanced Trade base tier. Set to 10 for Binance global VIP 0, or 0 to disable.",
+      "taker_bps": 60
+    }
   }
 }

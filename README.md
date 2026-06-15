@@ -192,8 +192,8 @@ uv run python -m deploy.response_viewer --bootstrap-servers <broker-url>
 
 All trades and periodic portfolio snapshots are automatically saved to CSV files in the `data/` directory. Each session produces two files:
 
-- **`trades_<timestamp>.csv`** — every executed trade with price, quantity, and agent cash after settlement
-- **`snapshots_<timestamp>.csv`** — periodic portfolio state per agent, including positions, market values, and unrealized P&L
+- **`trades_<timestamp>.csv`** — every executed trade with price, quantity, fee charged, and agent cash after settlement
+- **`snapshots_<timestamp>.csv`** — periodic portfolio state per agent, including positions, market values, unrealized and realized P&L, and cumulative fees paid
 
 You can configure the snapshot interval and output directory:
 
@@ -220,8 +220,8 @@ For full CLI flags, config-based deployment options, and the config schema, see 
 
 | Tool | Description |
 |------|-------------|
-| `execute_trade` | Buy or sell a crypto product at the current market price |
-| `get_portfolio` | View cash, open positions, cost basis, P&L, and average time held |
+| `execute_trade` | Buy or sell a crypto product at the current market price. A configurable taker fee is charged on every fill (see `trading.fees.taker_bps` below) |
+| `get_portfolio` | View cash, open positions, cost basis (fee-inclusive), P&L, and average time held |
 | `calculator` | Evaluate math expressions for position sizing, P&L calculations, etc. |
 
 <br>
@@ -233,3 +233,4 @@ For full CLI flags, config-based deployment options, and the config schema, see 
 | `arena/models.py` | `INITIAL_CASH` | `100_000.0` | Starting cash balance per agent |
 | `exchanges/coinbase.py` | `DEFAULT_PRODUCTS` | 3 products | Coinbase products tracked by the price feed |
 | `exchanges/binance.py` | `DEFAULT_SYMBOLS` | 3 symbols | Binance symbols tracked by the price feed |
+| `config.json` | `trading.fees.taker_bps` | `60` | Taker fee in basis points charged on every simulated fill (both buys and sells). `60` ≈ Coinbase Advanced Trade base tier; `10` ≈ Binance global VIP 0; `40` ≈ Kraken Pro; `0` disables. Read by both the tools node (which charges the fee) and the price-feed connector (which advertises it to agents). |

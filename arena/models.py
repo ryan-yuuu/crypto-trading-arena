@@ -27,6 +27,12 @@ class AgentAccount:
     # Weighted-average entry timestamp (Unix epoch) per position
     avg_entry_ts: dict[str, float] = field(default_factory=dict)
     trade_count: int = 0
+    # Cumulative taker fees paid across all fills (buys + sells).
+    total_fees_paid: float = 0.0
+    # Realized P&L from closed quantity, net of both entry and exit fees.
+    # Buy fees enter via the capitalized cost basis; sell fees are deducted
+    # from proceeds — so this figure already reflects the full round-trip cost.
+    realized_pnl: float = 0.0
 
     def portfolio_value(self, price_book: PriceBook) -> float:
         """Total value: cash + mark-to-market of all positions using live prices."""
@@ -45,6 +51,22 @@ class AgentAccount:
         return self.cost_basis.get(product_id, 0.0) / qty
 
 
+# ── Trade log ────────────────────────────────────────────────────
+
+
+class TradeLogEntry(typing.NamedTuple):
+    """One row of the in-memory trade log feeding the dashboard's recent-trades panel."""
+
+    timestamp: str
+    agent_id: str
+    action: str
+    product_id: str
+    quantity: float
+    price: float
+    fee: float
+    latency: float | None
+
+
 # ── Trade recorder protocol ──────────────────────────────────────
 
 
@@ -57,6 +79,7 @@ class TradeRecorder(typing.Protocol):
         product_id: str,
         quantity: float,
         price: float,
+        fee: float,
         cash_after: float,
         latency: float | None,
     ) -> None: ...

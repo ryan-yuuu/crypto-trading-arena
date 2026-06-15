@@ -165,11 +165,16 @@ class PortfolioView:
         )
         for rank, (agent_id, account) in enumerate(sorted_accounts, start=1):
             value = account.portfolio_value(price_book)
+            realized = account.realized_pnl
+            realized_color = "green" if realized >= 0 else "red"
+            realized_sign = "+" if realized >= 0 else ""
             card = Panel(
                 Text.from_markup(
                     f"[magenta]Total Value:[/] ${value:,.2f}\n"
                     f"[yellow]Positions:[/] {len(account.positions)}  "
-                    f"[cyan]Trades:[/] {account.trade_count}"
+                    f"[cyan]Trades:[/] {account.trade_count}\n"
+                    f"[{realized_color}]Realized P&L:[/] {realized_sign}${realized:,.2f}  "
+                    f"[dim]Fees paid:[/] ${account.total_fees_paid:,.2f}"
                 ),
                 title=f"[bold]#{rank} {agent_id}[/]",
                 border_style="cyan",
@@ -281,16 +286,16 @@ class PortfolioView:
         if not log:
             table.add_row("[dim italic]No trades yet...[/]", "", "", "", "", "", "")
         else:
-            for ts, agent_id, action, product_id, qty, price, latency in reversed(log):
-                action_style = "bold green" if action == "buy" else "bold red"
-                latency_str = f"{latency:.1f}s" if latency is not None else ""
+            for entry in reversed(log):
+                action_style = "bold green" if entry.action == "buy" else "bold red"
+                latency_str = f"{entry.latency:.1f}s" if entry.latency is not None else ""
                 table.add_row(
-                    ts,
-                    f"[{action_style}]{action.upper()}[/]",
-                    f"{qty:g}",
-                    product_id,
-                    f"${price:,.2f}",
-                    agent_id,
+                    entry.timestamp,
+                    f"[{action_style}]{entry.action.upper()}[/]",
+                    f"{entry.quantity:g}",
+                    entry.product_id,
+                    f"${entry.price:,.2f}",
+                    entry.agent_id,
                     latency_str,
                 )
 

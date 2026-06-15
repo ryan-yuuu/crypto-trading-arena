@@ -22,6 +22,7 @@ import websockets
 
 from calfkit import Client
 
+from arena.fees import FeeModel
 from arena.models import Candle, TIMEFRAMES
 from arena.price_book import CandleBook
 from exchanges import PRICE_TOPIC, TickerMessage
@@ -106,6 +107,7 @@ class CoinbaseKafkaConnector:
         client: Client,
         agent_topic: str,
         products: list[str],
+        fee_model: FeeModel,
         min_publish_interval: float = 0.0,
         candle_book: CandleBook | None = None,
     ) -> None:
@@ -117,6 +119,8 @@ class CoinbaseKafkaConnector:
         self._min_interval = min_publish_interval
         self._running = True
         self._candle_book = candle_book
+        # Fixed for the connector's lifetime, so build the agent-facing line once.
+        self._fee_disclosure = fee_model.disclosure_prompt()
 
         # Latest ticker per product — patched on every incoming message
         self._latest: dict[str, TickerMessage] = {}
@@ -180,7 +184,8 @@ class CoinbaseKafkaConnector:
             "Here is the latest ticker information. You should view your "
             "portfolio first before making any decisions to trade.\n"
             "price = last traded price, best_bid = price you sell at, "
-            "best_ask = price you buy at.\n\n"
+            "best_ask = price you buy at.\n"
+            f"{self._fee_disclosure}\n\n"
             f"{batch_json}",
         ]
 
@@ -312,23 +317,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 async def run(args: argparse.Namespace, agent_topic: str = AGENT_INPUT_TOPIC) -> None:
-    # Load products from config if not provided via CLI
-    products = args.products
-    if products is None:
-        from config import load_config
+    # Load the fee rate (and products, when not given via CLI) from config, which
+    # is the single source of truth shared with the tools node. load_config_strict
+    # fails loud if the file exists but is invalid, rather than guessing the fee.
+    from config import load_config_strict
 
-        try:
-            config = load_config(args.config)
-            products = config.trading.coinbase_products
-        except Exception as e:
-            logger.debug("Config not loaded, using default products: %s", e)
-            products = list(DEFAULT_PRODUCTS)
+    config = load_config_strict(args.config)
+    products = args.products or config.trading.coinbase_products or list(DEFAULT_PRODUCTS)
+    fee_model = FeeModel(taker_bps=config.trading.fees.taker_bps)
 
     client = Client.connect(args.bootstrap_servers)
     connector = CoinbaseKafkaConnector(
         client=client,
         agent_topic=agent_topic,
         products=products,
+        fee_model=fee_model,
         min_publish_interval=args.min_interval,
     )
 
@@ -341,6 +344,9 @@ async def run(args: argparse.Namespace, agent_topic: str = AGENT_INPUT_TOPIC) ->
     logger.info("  Broker:      %s", args.bootstrap_servers)
     logger.info("  Products:    %s", ", ".join(products))
     logger.info("  Min interval: %ss", args.min_interval)
+    logger.info(
+        "  Taker fee:   %d bps (%.2f%%)", fee_model.taker_bps, fee_model.taker_bps / 100
+    )
 
     await connector.start()
 
