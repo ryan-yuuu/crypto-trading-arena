@@ -13,6 +13,7 @@ from faststream.kafka import TestKafkaBroker
 
 from calfkit import Agent, Client, OpenAIModelClient, Worker
 
+from arena.fees import FeeModel
 from arena.models import INITIAL_CASH
 from arena.tools import calculator, execute_trade, get_portfolio, price_book, store
 
@@ -62,14 +63,21 @@ TEST_PRICES = {
 
 @pytest.fixture(autouse=True)
 def seed_price_book():
-    """Seed shared PriceBook with test data and reset accounts between tests."""
+    """Seed shared PriceBook with test data and reset accounts between tests.
+
+    Pins the fee model to 0 bps so cash-math assertions below are independent
+    of whatever production default is in effect. Fee application is covered
+    separately by arena/account_store.py unit paths.
+    """
     for data in TEST_PRICES.values():
         price_book.update(data)
     store._accounts.clear()
     store._trade_log.clear()
+    store.set_fee_model(FeeModel(taker_bps=0))
     yield
     store._accounts.clear()
     store._trade_log.clear()
+    store.set_fee_model(FeeModel())
 
 
 @pytest.fixture(scope="session")
@@ -109,6 +117,120 @@ def deploy_client() -> Client:
 def _account():
     """Get the arena agent's account from the shared store."""
     return store.get_or_create(AGENT_NAME)
+
+
+# ── Fee model unit tests (no LLM required) ──────────────────────
+
+
+def test_buy_fee_capitalized_into_cost_basis():
+    """A buy with fees charges notional + fee and rolls the fee into cost basis."""
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_buy"
+
+    result = store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    assert result.success, result.message
+
+    account = store.get_or_create(agent)
+    price = 50010.00  # best_ask
+    notional = price * 0.5
+    expected_fee = notional * 0.006
+    expected_cash_out = notional + expected_fee
+
+    assert account.cash == pytest.approx(INITIAL_CASH - expected_cash_out)
+    assert account.cost_basis["BTC-USD"] == pytest.approx(expected_cash_out)
+
+
+def test_sell_fee_deducted_from_proceeds():
+    """A sell with fees credits notional − fee to cash."""
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_sell"
+
+    store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    account = store.get_or_create(agent)
+    cash_after_buy = account.cash
+
+    result = store.execute_trade(agent, "BTC-USD", 0.5, "sell")
+    assert result.success, result.message
+
+    sell_price = 49990.00  # best_bid
+    sell_notional = sell_price * 0.5
+    sell_fee = sell_notional * 0.006
+    expected_proceeds = sell_notional - sell_fee
+
+    assert account.cash == pytest.approx(cash_after_buy + expected_proceeds)
+    # Fully closed position — round-trip in a flat market always loses both fees
+    assert "BTC-USD" not in account.positions
+
+
+def test_zero_fee_matches_notional():
+    """taker_bps=0 recovers the fee-free behavior."""
+    store.set_fee_model(FeeModel(taker_bps=0))
+    agent = "fee_test_zero"
+
+    store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    account = store.get_or_create(agent)
+
+    assert account.cash == pytest.approx(INITIAL_CASH - 50010.00 * 0.5)
+    assert account.cost_basis["BTC-USD"] == pytest.approx(50010.00 * 0.5)
+
+
+def test_buy_fee_blocks_when_cash_insufficient_for_fee():
+    """A buy that fits notional-only but not notional+fee is rejected."""
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_insufficient"
+    account = store.get_or_create(agent)
+    # Just enough cash for notional, not for the 0.6% fee on top.
+    account.cash = 50010.00 * 0.5
+
+    result = store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    assert not result.success
+    assert "Insufficient cash" in result.message
+
+
+def test_total_fees_paid_accumulates_buy_and_sell():
+    """total_fees_paid sums the taker fee from every fill (buys and sells)."""
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_total"
+
+    store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    store.execute_trade(agent, "BTC-USD", 0.5, "sell")
+    account = store.get_or_create(agent)
+
+    buy_fee = 50010.00 * 0.5 * 0.006
+    sell_fee = 49990.00 * 0.5 * 0.006
+    assert account.total_fees_paid == pytest.approx(buy_fee + sell_fee)
+
+
+def test_realized_pnl_zero_until_position_closed():
+    """Opening a position accrues fees but realizes no P&L until a sell."""
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_open_only"
+
+    store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    account = store.get_or_create(agent)
+
+    assert account.realized_pnl == 0.0
+    assert account.total_fees_paid == pytest.approx(50010.00 * 0.5 * 0.006)
+
+
+def test_realized_pnl_nets_both_fees_on_round_trip():
+    """A flat-market round trip realizes a loss equal to the spread plus both fees.
+
+    Buy fees enter realized P&L through the capitalized cost basis; sell fees are
+    deducted from proceeds — so the figure already reflects the full round-trip cost.
+    """
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_realized"
+
+    store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    store.execute_trade(agent, "BTC-USD", 0.5, "sell")
+    account = store.get_or_create(agent)
+
+    cost_basis = 50010.00 * 0.5 * 1.006  # notional + capitalized buy fee
+    proceeds = 49990.00 * 0.5 * 0.994  # notional − sell fee
+    assert account.realized_pnl == pytest.approx(proceeds - cost_basis)
+    assert account.realized_pnl < 0  # spread + round-trip fees guarantee a loss
+    assert "BTC-USD" not in account.positions
 
 
 # ── Tests ───────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ from exchanges import (
     PRICE_TOPIC,
     TickerMessage,
 )
+from arena.fees import FeeModel
 from arena.tools import (
     calculator,
     execute_trade,
@@ -18,6 +19,7 @@ from arena.tools import (
     store,
     view,
 )
+from config import load_config
 
 # Tools & Price Feed — Deploys trading tool workers and subscribes
 # to the Kafka price topic published by the connector.
@@ -55,6 +57,11 @@ def parse_args():
         default="./data",
         help="Output directory for CSV data files",
     )
+    parser.add_argument(
+        "--config",
+        default="config.json",
+        help="Path to config file (default: config.json).",
+    )
     return parser.parse_args()
 
 
@@ -70,6 +77,17 @@ async def main():
     print("=" * 50)
     print("Tools & Price Feed Deployment")
     print("=" * 50)
+
+    # Resolve the taker fee from config — the single source of truth shared with
+    # the price-feed connector, so the fee charged here always matches the fee the
+    # connector advertises to agents in the ticker prompt.
+    try:
+        taker_bps = load_config(args.config).trading.fees.taker_bps
+    except Exception as e:
+        logging.getLogger(__name__).debug("Config not loaded, using default fee: %s", e)
+        taker_bps = FeeModel().taker_bps
+    store.set_fee_model(FeeModel(taker_bps=taker_bps))
+    print(f"Trading fee: {taker_bps} bps ({taker_bps / 100:.2f}% taker) applied to every fill")
 
     print(f"\nConnecting to Kafka broker at {args.bootstrap_servers}...")
     client = Client.connect(args.bootstrap_servers)

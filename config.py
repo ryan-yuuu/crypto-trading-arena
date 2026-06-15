@@ -59,6 +59,21 @@ class AgentConfig(BaseModel):
     strategy: str = Field("default", description="Trading strategy (selects system prompt).")
 
 
+class FeeConfig(BaseModel):
+    """Trading fee configuration. All simulated fills cross the spread, so only
+    the taker rate is applied. Expressed in basis points (1 bps = 0.01%).
+
+    Default 60 bps matches Coinbase Advanced Trade's base-tier taker rate. Set to
+    10 for Binance global (VIP 0), 40 for Kraken Pro, or 0 to disable.
+    """
+
+    taker_bps: int = Field(
+        60,
+        description="Taker fee in basis points (60 bps = 0.60%). 0 disables fees.",
+        ge=0,
+    )
+
+
 class TradingConfig(BaseModel):
     """Trading-related configuration."""
 
@@ -72,6 +87,10 @@ class TradingConfig(BaseModel):
     coinbase_products: list[str] = Field(
         default_factory=lambda: DEFAULT_COINBASE_PRODUCTS.copy(),
         description="Coinbase product IDs to subscribe to.",
+    )
+    fees: FeeConfig = Field(
+        default_factory=FeeConfig,
+        description="Trading fees applied to every simulated fill.",
     )
 
 

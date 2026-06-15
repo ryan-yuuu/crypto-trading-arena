@@ -213,6 +213,7 @@ class BinanceKafkaConnector:
         symbols: list[str],
         min_publish_interval: float = 0.0,
         candle_book: CandleBook | None = None,
+        taker_bps: int = 60,
     ) -> None:
         if not symbols:
             raise ValueError("At least one symbol must be specified")
@@ -222,6 +223,7 @@ class BinanceKafkaConnector:
         self._min_interval = min_publish_interval
         self._running = True
         self._candle_book = candle_book
+        self._taker_bps = taker_bps
 
         # Latest ticker per symbol — patched on every incoming message
         self._latest: dict[str, TickerMessage] = {}
@@ -308,11 +310,20 @@ class BinanceKafkaConnector:
         }
         batch_json = json.dumps([t.model_dump(exclude=_exclude) for t in batch])
 
+        fee_line = (
+            f"A taker fee of {self._taker_bps} bps "
+            f"({self._taker_bps / 100:.2f}%) is charged on every fill "
+            "(both buys and sells). Factor this into your sizing and P&L targets — "
+            f"a round-trip costs {2 * self._taker_bps} bps."
+            if self._taker_bps > 0
+            else "Trading is fee-free in this deployment."
+        )
         prompt_parts = [
             "Here is the latest ticker information. You should view your "
             "portfolio first before making any decisions to trade.\n"
             "price = last traded price, best_bid = price you sell at, "
-            "best_ask = price you buy at.\n\n"
+            "best_ask = price you buy at.\n"
+            f"{fee_line}\n\n"
             f"{batch_json}",
         ]
 
@@ -509,17 +520,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 async def run(args: argparse.Namespace, agent_topic: str = AGENT_INPUT_TOPIC) -> None:
-    # Load symbols from config if not provided via CLI
+    # Load symbols + fee rate from config if not provided via CLI
     symbols = args.symbols
+    taker_bps = 60
     if symbols is None:
         from config import load_config
 
         try:
             config = load_config(args.config)
             symbols = config.trading.binance_symbols
+            taker_bps = config.trading.fees.taker_bps
         except Exception as e:
-            logger.debug("Config not loaded, using default symbols: %s", e)
+            logger.debug("Config not loaded, using defaults: %s", e)
             symbols = list(DEFAULT_SYMBOLS)
+    else:
+        from config import load_config
+
+        try:
+            taker_bps = load_config(args.config).trading.fees.taker_bps
+        except Exception as e:
+            logger.debug("Config not loaded, using default fee: %s", e)
 
     candle_book = CandleBook(parse_row=parse_binance_candle)
     client = Client.connect(args.bootstrap_servers)
@@ -529,6 +549,7 @@ async def run(args: argparse.Namespace, agent_topic: str = AGENT_INPUT_TOPIC) ->
         symbols=symbols,
         min_publish_interval=args.min_interval,
         candle_book=candle_book,
+        taker_bps=taker_bps,
     )
 
     loop = asyncio.get_running_loop()
@@ -540,6 +561,7 @@ async def run(args: argparse.Namespace, agent_topic: str = AGENT_INPUT_TOPIC) ->
     logger.info("  Broker:      %s", args.bootstrap_servers)
     logger.info("  Symbols:     %s", ", ".join(symbols))
     logger.info("  Min interval: %ss", args.min_interval)
+    logger.info("  Taker fee:   %d bps (%.2f%%)", taker_bps, taker_bps / 100)
 
     await connector.start()
 

@@ -6,6 +6,7 @@ The trading arena supports a JSON configuration file (`config.json` by default) 
 - Multiple LLM providers (OpenAI, OpenRouter)
 - Multiple agents with different providers/models/strategies
 - Exchange selection and trading pairs for Binance and Coinbase
+- The taker fee charged on every simulated fill (`trading.fees.taker_bps`)
 
 To get started, copy the example and fill in your API keys:
 ```bash
@@ -51,7 +52,8 @@ For the full config schema with all fields, types, and defaults, see [`config.sc
   "trading": {
     "exchange": "coinbase",
     "binance_symbols": ["BTCUSDT", "SOLUSDT", "FARTCOINUSDT"],
-    "coinbase_products": ["BTC-USD", "SOL-USD", "FARTCOIN-USD"]
+    "coinbase_products": ["BTC-USD", "SOL-USD", "FARTCOIN-USD"],
+    "fees": { "taker_bps": 60 }
   }
 }
 ```
@@ -151,4 +153,48 @@ uv run python -m exchanges.coinbase --bootstrap-servers localhost:9092
 uv run python -m exchanges.coinbase \
     --bootstrap-servers localhost:9092 \
     --products BTC-USD ETH-USD SOL-USD
+```
+
+---
+
+## deploy/tools_and_dashboard.py
+
+Deploy trading tools, the price-feed subscriber, and the live dashboard.
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--bootstrap-servers` | Yes | — | Kafka broker address |
+| `--config` | No | `config.json` | Path to config file |
+| `--snapshot-interval` | No | `600` | Seconds between portfolio snapshots (`0` disables CSV recording) |
+| `--data-dir` | No | `./data` | Output directory for CSV data files |
+
+The taker fee is configured by `trading.fees.taker_bps` in `config.json` — the
+single source of truth read by both this tools node and the price-feed connector,
+so the fee charged on fills always matches the fee the connector advertises to
+agents. The fee applies to both buys and sells (buys pay notional + fee, sells
+receive notional − fee, and buy fees capitalize into cost basis).
+
+> **Changing the fee:** both processes read `taker_bps` once at startup, so after
+> editing `config.json` you must restart **both** the exchange connector and this
+> tools-and-dashboard process. Restarting only one leaves the charged fee and the
+> fee advertised to agents out of sync.
+
+Realistic values:
+
+| Exchange | Suggested `taker_bps` |
+|---|---|
+| Coinbase Advanced Trade base tier | `60` (default) |
+| Binance global (VIP 0) | `10` |
+| Binance.US | `60` |
+| Kraken Pro | `40` |
+| Disable fees | `0` |
+
+**Examples:**
+```bash
+# Uses trading.fees.taker_bps from config.json (default 60 bps)
+uv run python -m deploy.tools_and_dashboard --bootstrap-servers localhost:9092
+
+# Point at an alternate config (e.g. one with taker_bps: 10 for Binance VIP 0)
+uv run python -m deploy.tools_and_dashboard \
+    --bootstrap-servers localhost:9092 --config config.binance.json
 ```

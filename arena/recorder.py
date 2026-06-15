@@ -29,6 +29,7 @@ class TradeRow(BaseModel):
     quantity: float
     price: float
     total_value: float
+    fee: float
     cash_after: float
     latency: float | None
 
@@ -45,6 +46,8 @@ class SnapshotRow(BaseModel):
     unrealized_pnl: float
     portfolio_value: float
     trade_count: int
+    realized_pnl: float
+    total_fees_paid: float
 
 
 # ── DataRecorder ─────────────────────────────────────────────────
@@ -91,6 +94,7 @@ class DataRecorder:
         product_id: str,
         quantity: float,
         price: float,
+        fee: float,
         cash_after: float,
         latency: float | None,
     ) -> None:
@@ -102,6 +106,7 @@ class DataRecorder:
             quantity=quantity,
             price=price,
             total_value=price * quantity,
+            fee=fee,
             cash_after=cash_after,
             latency=latency,
         )
@@ -134,6 +139,8 @@ class DataRecorder:
                     unrealized_pnl=0.0,
                     portfolio_value=portfolio_val,
                     trade_count=account.trade_count,
+                    realized_pnl=account.realized_pnl,
+                    total_fees_paid=account.total_fees_paid,
                 )
                 self._snapshots_writer.writerow(row.model_dump())
             else:
@@ -156,6 +163,8 @@ class DataRecorder:
                         unrealized_pnl=unrealized_pnl,
                         portfolio_value=portfolio_val,
                         trade_count=account.trade_count,
+                        realized_pnl=account.realized_pnl,
+                        total_fees_paid=account.total_fees_paid,
                     )
                     self._snapshots_writer.writerow(row.model_dump())
 

@@ -111,9 +111,27 @@
           },
           "title": "Coinbase Products",
           "type": "array"
+        },
+        "fees": {
+          "$ref": "#/$defs/FeeConfig",
+          "description": "Trading fees applied to every simulated fill."
         }
       },
       "title": "TradingConfig",
+      "type": "object"
+    },
+    "FeeConfig": {
+      "description": "Trading fee configuration. Only the taker rate applies because all simulated fills cross the spread.",
+      "properties": {
+        "taker_bps": {
+          "default": 60,
+          "description": "Taker fee in basis points (60 bps = 0.60%). 0 disables fees.",
+          "minimum": 0,
+          "title": "Taker Bps",
+          "type": "integer"
+        }
+      },
+      "title": "FeeConfig",
       "type": "object"
     }
   },

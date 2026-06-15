@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from arena.fees import FeeModel
 from arena.models import AgentAccount, TradeRecorder, TradeResult
 from arena.price_book import PriceBook
 
@@ -14,14 +15,23 @@ log = logging.getLogger(__name__)
 class AccountStore:
     """In-memory trading account store, keyed by agent_id."""
 
-    def __init__(self, price_book: PriceBook) -> None:
+    def __init__(self, price_book: PriceBook, fee_model: FeeModel | None = None) -> None:
         self._accounts: dict[str, AgentAccount] = {}
-        self._trade_log: list[tuple[str, str, str, str, float, float, float | None]] = []
+        self._trade_log: list[tuple[str, str, str, str, float, float, float, float | None]] = []
         self._price_book = price_book
         self._data_recorder: TradeRecorder | None = None
+        self._fee_model = fee_model or FeeModel()
 
     def attach_recorder(self, recorder: TradeRecorder) -> None:
         self._data_recorder = recorder
+
+    def set_fee_model(self, fee_model: FeeModel) -> None:
+        """Replace the active fee model. Used by deploy entrypoints after CLI/config resolution."""
+        self._fee_model = fee_model
+
+    @property
+    def fee_model(self) -> FeeModel:
+        return self._fee_model
 
     def get_or_create(self, agent_id: str) -> AgentAccount:
         if agent_id not in self._accounts:
@@ -38,7 +48,7 @@ class AccountStore:
         return self._price_book
 
     @property
-    def trade_log(self) -> list[tuple[str, str, str, str, float, float, float | None]]:
+    def trade_log(self) -> list[tuple[str, str, str, str, float, float, float, float | None]]:
         return self._trade_log
 
     def execute_trade(
@@ -89,18 +99,21 @@ class AccountStore:
 
         if action == "buy":
             price = float(entry["best_ask"])
-            cost = price * quantity
-            if cost > account.cash:
+            notional = price * quantity
+            cash_out, fee = self._fee_model.buy_cost(notional)
+            if cash_out > account.cash:
                 log.debug(
                     "account_store.execute_trade REJECT: insufficient cash "
-                    "need=%.2f have=%.2f agent=%s",
-                    cost, account.cash, agent_id,
+                    "need=%.2f (incl fee=%.2f) have=%.2f agent=%s",
+                    cash_out, fee, account.cash, agent_id,
                 )
                 return TradeResult(
                     False,
-                    f"Insufficient cash. Need ${cost:,.2f} but only have ${account.cash:,.2f}.",
+                    f"Insufficient cash. Need ${cash_out:,.2f} "
+                    f"(${notional:,.2f} + ${fee:,.2f} fee) "
+                    f"but only have ${account.cash:,.2f}.",
                 )
-            account.cash -= cost
+            account.cash -= cash_out
             existing_qty = account.positions.get(product_id, 0)
             now_ts = datetime.now().timestamp()
             existing_ts = account.avg_entry_ts.get(product_id, now_ts)
@@ -108,18 +121,21 @@ class AccountStore:
                 existing_qty + quantity
             )
             account.positions[product_id] = existing_qty + quantity
-            account.cost_basis[product_id] = account.cost_basis.get(product_id, 0.0) + cost
+            # Capitalize the fee into cost basis: cost basis = notional + fee = cash_out
+            account.cost_basis[product_id] = account.cost_basis.get(product_id, 0.0) + cash_out
+            account.total_fees_paid += fee
             account.trade_count += 1
-            self._record_trade(agent_id, action, product_id, quantity, price, latency)
+            self._record_trade(agent_id, action, product_id, quantity, price, fee, latency)
             log.debug(
                 "account_store.execute_trade BUY OK: agent=%s %s %s @ $%.2f "
-                "cost=$%.2f cash_after=$%.2f positions=%s trade_count=%d",
+                "notional=$%.2f fee=$%.2f cash_after=$%.2f positions=%s trade_count=%d",
                 agent_id, quantity, product_id, price,
-                cost, account.cash, dict(account.positions), account.trade_count,
+                notional, fee, account.cash, dict(account.positions), account.trade_count,
             )
             return TradeResult(
                 True,
-                f"Bought {quantity} {product_id} @ ${price:,.2f} for ${cost:,.2f}. "
+                f"Bought {quantity} {product_id} @ ${price:,.2f} for ${cash_out:,.2f} "
+                f"(${notional:,.2f} + ${fee:,.2f} fee @ {self._fee_model.taker_bps} bps). "
                 f"Cash remaining: ${account.cash:,.2f}.",
             )
 
@@ -137,10 +153,15 @@ class AccountStore:
                 f"Insufficient holdings. Want to sell {quantity} {product_id} "
                 f"but only hold {held}.",
             )
-        proceeds = price * quantity
-        account.cash += proceeds
-        # Reduce cost basis proportionally (average cost method)
+        notional = price * quantity
+        cash_in, fee = self._fee_model.sell_proceeds(notional)
+        account.cash += cash_in
+        # Reduce cost basis proportionally (average cost method). avg_cost includes
+        # the capitalized buy fee, so realized P&L nets both the entry and exit fees:
+        # (notional − sell_fee) − avg_cost·qty.
         avg_cost = account.avg_cost_per_unit(product_id)
+        account.realized_pnl += cash_in - (avg_cost * quantity)
+        account.total_fees_paid += fee
         account.cost_basis[product_id] = account.cost_basis.get(product_id, 0.0) - (
             avg_cost * quantity
         )
@@ -152,16 +173,17 @@ class AccountStore:
         else:
             account.positions[product_id] = new_qty
         account.trade_count += 1
-        self._record_trade(agent_id, action, product_id, quantity, price, latency)
+        self._record_trade(agent_id, action, product_id, quantity, price, fee, latency)
         log.debug(
             "account_store.execute_trade SELL OK: agent=%s %s %s @ $%.2f "
-            "proceeds=$%.2f cash_after=$%.2f positions=%s trade_count=%d",
+            "notional=$%.2f fee=$%.2f cash_after=$%.2f positions=%s trade_count=%d",
             agent_id, quantity, product_id, price,
-            proceeds, account.cash, dict(account.positions), account.trade_count,
+            notional, fee, account.cash, dict(account.positions), account.trade_count,
         )
         return TradeResult(
             True,
-            f"Sold {quantity} {product_id} @ ${price:,.2f} for ${proceeds:,.2f}. "
+            f"Sold {quantity} {product_id} @ ${price:,.2f} for ${cash_in:,.2f} "
+            f"(${notional:,.2f} − ${fee:,.2f} fee @ {self._fee_model.taker_bps} bps). "
             f"Cash remaining: ${account.cash:,.2f}.",
         )
 
@@ -170,12 +192,13 @@ class AccountStore:
         agent_id: str,
         action: str,
         product_id: str,
-        quantity: int,
+        quantity: float,
         price: float,
+        fee: float,
         latency: float | None = None,
     ) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
-        self._trade_log.append((ts, agent_id, action, product_id, quantity, price, latency))
+        self._trade_log.append((ts, agent_id, action, product_id, quantity, price, fee, latency))
 
         if self._data_recorder is not None:
             account = self._accounts.get(agent_id)
@@ -185,6 +208,7 @@ class AccountStore:
                 product_id=product_id,
                 quantity=quantity,
                 price=price,
+                fee=fee,
                 cash_after=account.cash if account else 0.0,
                 latency=latency,
             )

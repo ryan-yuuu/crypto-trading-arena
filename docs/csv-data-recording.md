@@ -38,16 +38,17 @@ One row is written per executed trade, immediately on execution.
 | `product_id` | string | Trading pair (e.g. `BTC-USD`, `SOL-USD`) |
 | `quantity` | float | Number of units traded |
 | `price` | float | Execution price per unit (best ask for buys, best bid for sells) |
-| `total_value` | float | `price * quantity` — total dollar value of the trade |
-| `cash_after` | float | Agent's cash balance after the trade settled |
+| `total_value` | float | `price * quantity` — gross notional of the trade (before fees) |
+| `fee` | float | Taker fee charged. Added on top of notional for buys, deducted from proceeds for sells. `0.0` if fees are disabled |
+| `cash_after` | float | Agent's cash balance after the trade settled (net of fees) |
 | `latency` | float or empty | Seconds between tool invocation and trade execution. Empty if not measured |
 
 ### Example
 
 ```csv
-timestamp,agent_id,action,product_id,quantity,price,total_value,cash_after,latency
-2026-02-26T14:30:52.123456,momentum,buy,BTC-USD,0.5,64200.00,32100.00,67900.00,1.2
-2026-02-26T14:31:10.654321,scalper,sell,SOL-USD,10.0,142.50,1425.00,101425.00,0.8
+timestamp,agent_id,action,product_id,quantity,price,total_value,fee,cash_after,latency
+2026-02-26T14:30:52.123456,momentum,buy,BTC-USD,0.5,64200.00,32100.00,192.60,67707.40,1.2
+2026-02-26T14:31:10.654321,scalper,sell,SOL-USD,10.0,142.50,1425.00,8.55,101416.45,0.8
 ```
 
 ---
@@ -69,17 +70,19 @@ Periodic portfolio snapshots taken at the configured interval. The data is **den
 | `unrealized_pnl` | float | `market_value - cost_basis` — unrealized profit/loss on this position |
 | `portfolio_value` | float | Agent's total portfolio value (cash + all positions at market). Repeated on every row for the agent |
 | `trade_count` | int | Total number of trades the agent has executed to date |
+| `realized_pnl` | float | Cumulative realized P&L from closed quantity, net of both entry and exit fees. Account-level; repeated on every row for the agent |
+| `total_fees_paid` | float | Cumulative taker fees paid across all fills (buys + sells). Account-level; repeated on every row for the agent |
 
 ### Denormalization
 
-An agent holding 3 assets produces 3 rows per snapshot (one per asset), all sharing the same `timestamp`, `agent_id`, `cash`, `portfolio_value`, and `trade_count`. An agent with no positions produces 1 row with `product_id=""` and zero-valued position fields — this preserves the cash and portfolio value in the record.
+An agent holding 3 assets produces 3 rows per snapshot (one per asset), all sharing the same `timestamp`, `agent_id`, `cash`, `portfolio_value`, `trade_count`, `realized_pnl`, and `total_fees_paid`. An agent with no positions produces 1 row with `product_id=""` and zero-valued position fields — this preserves the cash, portfolio value, and account-level totals in the record.
 
 ### Example
 
 ```csv
-timestamp,agent_id,cash,product_id,quantity,cost_basis,market_price,market_value,unrealized_pnl,portfolio_value,trade_count
-2026-02-26T14:35:00.000000,momentum,67900.00,BTC-USD,0.5,32100.00,64500.00,32250.00,150.00,100150.00,1
-2026-02-26T14:35:00.000000,scalper,101425.00,,0.0,0.0,0.0,0.0,0.0,101425.00,1
+timestamp,agent_id,cash,product_id,quantity,cost_basis,market_price,market_value,unrealized_pnl,portfolio_value,trade_count,realized_pnl,total_fees_paid
+2026-02-26T14:35:00.000000,momentum,67707.40,BTC-USD,0.5,32292.60,64500.00,32250.00,-42.60,99957.40,1,0.00,192.60
+2026-02-26T14:35:00.000000,scalper,101416.45,,0.0,0.0,0.0,0.0,0.0,101416.45,2,1416.45,33.55
 ```
 
 ---

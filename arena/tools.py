@@ -119,13 +119,19 @@ def execute_trade(ctx: ToolContext, product_id: str, quantity: float, action: st
     Buys execute at the best ask price, sells at the best bid.
     Fractional share trading is allowed, but only to one decimal place (e.g., 0.5, 1.2).
 
+    A taker fee (set by the deployment) is charged on every fill and applies to both
+    buys and sells. Buys cost: notional + fee. Sells proceed: notional − fee. The fee
+    rate in effect is reported alongside each ticker update you receive. Size positions
+    so expected returns exceed the round-trip fee, or you will lose money on flat markets.
+
     Args:
         product_id: Trading pair (e.g., BTC-USD, FARTCOIN-USD, SOL-USD)
         quantity: Number of units to trade (positive, up to 1 decimal place)
         action: 'buy' or 'sell'
 
     Returns:
-        Trade confirmation with execution price and remaining cash, or an error message
+        Trade confirmation with execution price, fee charged, and remaining cash,
+        or an error message
     """
     log.debug(
         "execute_trade ENTER: agent=%s product=%s qty=%s action=%s tool_call_id=%s",
