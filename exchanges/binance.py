@@ -211,9 +211,9 @@ class BinanceKafkaConnector:
         client: Client,
         agent_topic: str,
         symbols: list[str],
+        taker_bps: int,
         min_publish_interval: float = 0.0,
         candle_book: CandleBook | None = None,
-        taker_bps: int = 60,
     ) -> None:
         if not symbols:
             raise ValueError("At least one symbol must be specified")
@@ -520,26 +520,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 async def run(args: argparse.Namespace, agent_topic: str = AGENT_INPUT_TOPIC) -> None:
-    # Load symbols + fee rate from config if not provided via CLI
-    symbols = args.symbols
-    taker_bps = 60
-    if symbols is None:
-        from config import load_config
+    # Load the fee rate (and symbols, when not given via CLI) from config.
+    # load_config returns defaults if config.json is absent; if it raises, the file
+    # exists but is invalid — fail loud rather than silently using the wrong fee.
+    from config import load_config
 
-        try:
-            config = load_config(args.config)
-            symbols = config.trading.binance_symbols
-            taker_bps = config.trading.fees.taker_bps
-        except Exception as e:
-            logger.debug("Config not loaded, using defaults: %s", e)
-            symbols = list(DEFAULT_SYMBOLS)
-    else:
-        from config import load_config
-
-        try:
-            taker_bps = load_config(args.config).trading.fees.taker_bps
-        except Exception as e:
-            logger.debug("Config not loaded, using default fee: %s", e)
+    try:
+        config = load_config(args.config)
+    except Exception:
+        logger.error(
+            "Failed to load config from %s; refusing to start with an unknown fee "
+            "rate. Fix the config, or remove it to use defaults.", args.config,
+        )
+        raise
+    symbols = args.symbols or config.trading.binance_symbols or list(DEFAULT_SYMBOLS)
+    taker_bps = config.trading.fees.taker_bps
 
     candle_book = CandleBook(parse_row=parse_binance_candle)
     client = Client.connect(args.bootstrap_servers)

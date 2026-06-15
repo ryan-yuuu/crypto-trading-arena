@@ -13,7 +13,7 @@ from faststream.kafka import TestKafkaBroker
 
 from calfkit import Agent, Client, OpenAIModelClient, Worker
 
-from arena.fees import FeeModel
+from arena.fees import MAX_TAKER_BPS, FeeModel, Fill
 from arena.models import INITIAL_CASH
 from arena.tools import calculator, execute_trade, get_portfolio, price_book, store
 
@@ -231,6 +231,129 @@ def test_realized_pnl_nets_both_fees_on_round_trip():
     assert account.realized_pnl == pytest.approx(proceeds - cost_basis)
     assert account.realized_pnl < 0  # spread + round-trip fees guarantee a loss
     assert "BTC-USD" not in account.positions
+
+
+def test_partial_sell_reduces_basis_proportionally_and_realizes_pnl():
+    """Selling part of a position keeps per-unit cost constant and realizes P&L on the sold portion."""
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_partial"
+
+    store.execute_trade(agent, "BTC-USD", 1.0, "buy")
+    account = store.get_or_create(agent)
+    avg_cost = account.avg_cost_per_unit("BTC-USD")  # fee-inclusive
+
+    store.execute_trade(agent, "BTC-USD", 0.4, "sell")
+
+    cash_in = 49990.00 * 0.4 * 0.994  # best_bid notional − sell fee
+    assert account.positions["BTC-USD"] == pytest.approx(0.6)
+    # Per-unit cost is unchanged by a partial sell; only quantity and basis shrink.
+    assert account.avg_cost_per_unit("BTC-USD") == pytest.approx(avg_cost)
+    assert account.cost_basis["BTC-USD"] == pytest.approx(avg_cost * 0.6)
+    assert account.realized_pnl == pytest.approx(cash_in - avg_cost * 0.4)
+
+
+def test_multiple_buys_use_weighted_average_cost_including_fees():
+    """Two buys at different prices blend into a single fee-inclusive weighted-average cost."""
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_avg"
+
+    store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    cost1 = 50010.00 * 0.5 * 1.006  # notional + capitalized fee
+
+    # Raise BTC's price, then buy again. The fixture re-seeds the book each test,
+    # so this mutation does not leak.
+    higher = dict(
+        TEST_PRICES["BTC-USD"], price="60000.00", best_bid="59990.00", best_ask="60010.00"
+    )
+    price_book.update(higher)
+    store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    cost2 = 60010.00 * 0.5 * 1.006
+
+    account = store.get_or_create(agent)
+    assert account.positions["BTC-USD"] == pytest.approx(1.0)
+    assert account.cost_basis["BTC-USD"] == pytest.approx(cost1 + cost2)
+    assert account.avg_cost_per_unit("BTC-USD") == pytest.approx(cost1 + cost2)
+
+
+def test_realized_pnl_accumulates_across_multiple_closes():
+    """realized_pnl sums P&L across separate closes rather than overwriting."""
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_accum"
+
+    store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    store.execute_trade(agent, "BTC-USD", 0.5, "sell")
+    account = store.get_or_create(agent)
+    first_close = account.realized_pnl
+    assert first_close < 0
+
+    store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    store.execute_trade(agent, "BTC-USD", 0.5, "sell")
+    assert account.realized_pnl == pytest.approx(2 * first_close)
+
+
+def test_rejected_buy_leaves_account_state_unchanged():
+    """A buy rejected for insufficient cash must not mutate any account state."""
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_reject"
+    account = store.get_or_create(agent)
+    account.cash = 100.0  # nowhere near enough for 0.5 BTC
+
+    result = store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    assert not result.success
+    assert account.cash == 100.0
+    assert account.positions == {}
+    assert account.cost_basis == {}
+    assert account.total_fees_paid == 0.0
+    assert account.realized_pnl == 0.0
+    assert account.trade_count == 0
+
+
+def test_recorder_receives_fee_on_trade():
+    """The taker fee is forwarded to an attached TradeRecorder."""
+    store.set_fee_model(FeeModel(taker_bps=60))
+    agent = "fee_test_recorder"
+    captured: dict[str, float] = {}
+
+    class _FakeRecorder:
+        def record_trade(
+            self, *, agent_id, action, product_id, quantity, price, fee, cash_after, latency
+        ):
+            captured.update(fee=fee, cash_after=cash_after)
+
+    store.attach_recorder(_FakeRecorder())
+    try:
+        store.execute_trade(agent, "BTC-USD", 0.5, "buy")
+    finally:
+        store.attach_recorder(None)  # detach so other tests are unaffected
+
+    assert captured["fee"] == pytest.approx(50010.00 * 0.5 * 0.006)
+
+
+# ── FeeModel unit tests (no account store) ──────────────────────
+
+
+def test_fee_model_unit_behavior():
+    """FeeModel computes taker_rate and fills as pure functions."""
+    fm = FeeModel(taker_bps=60)
+    assert fm.taker_rate == pytest.approx(0.006)
+
+    buy = fm.buy_cost(1000.0)
+    assert isinstance(buy, Fill)
+    assert (buy.cash, buy.fee) == pytest.approx((1006.0, 6.0))
+
+    sell = fm.sell_proceeds(1000.0)
+    assert (sell.cash, sell.fee) == pytest.approx((994.0, 6.0))
+
+    # Zero fee is a pass-through.
+    assert FeeModel(taker_bps=0).buy_cost(1000.0) == (1000.0, 0.0)
+
+
+def test_fee_model_rejects_out_of_range_bps():
+    """taker_bps must lie within [0, MAX_TAKER_BPS]."""
+    with pytest.raises(ValueError):
+        FeeModel(taker_bps=-1)
+    with pytest.raises(ValueError):
+        FeeModel(taker_bps=MAX_TAKER_BPS + 1)
 
 
 # ── Tests ───────────────────────────────────────────────────────

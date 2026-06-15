@@ -80,12 +80,17 @@ async def main():
 
     # Resolve the taker fee from config — the single source of truth shared with
     # the price-feed connector, so the fee charged here always matches the fee the
-    # connector advertises to agents in the ticker prompt.
+    # connector advertises to agents. load_config returns defaults when config.json
+    # is absent; if it raises, the file exists but is invalid — fail loud rather than
+    # silently charging the wrong fee.
     try:
         taker_bps = load_config(args.config).trading.fees.taker_bps
-    except Exception as e:
-        logging.getLogger(__name__).debug("Config not loaded, using default fee: %s", e)
-        taker_bps = FeeModel().taker_bps
+    except Exception:
+        logging.getLogger(__name__).error(
+            "Failed to load fee config from %s; refusing to start with an unknown fee "
+            "rate. Fix the config, or remove it to use defaults.", args.config,
+        )
+        raise
     store.set_fee_model(FeeModel(taker_bps=taker_bps))
     print(f"Trading fee: {taker_bps} bps ({taker_bps / 100:.2f}% taker) applied to every fill")
 

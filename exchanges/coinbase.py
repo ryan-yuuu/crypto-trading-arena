@@ -106,9 +106,9 @@ class CoinbaseKafkaConnector:
         client: Client,
         agent_topic: str,
         products: list[str],
+        taker_bps: int,
         min_publish_interval: float = 0.0,
         candle_book: CandleBook | None = None,
-        taker_bps: int = 60,
     ) -> None:
         if not products:
             raise ValueError("At least one product must be specified")
@@ -323,27 +323,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 async def run(args: argparse.Namespace, agent_topic: str = AGENT_INPUT_TOPIC) -> None:
-    # Load products + fee rate from config if not provided via CLI
-    products = args.products
-    taker_bps = 60
-    if products is None:
-        from config import load_config
+    # Load the fee rate (and products, when not given via CLI) from config.
+    # load_config returns defaults if config.json is absent; if it raises, the file
+    # exists but is invalid — fail loud rather than silently using the wrong fee.
+    from config import load_config
 
-        try:
-            config = load_config(args.config)
-            products = config.trading.coinbase_products
-            taker_bps = config.trading.fees.taker_bps
-        except Exception as e:
-            logger.debug("Config not loaded, using defaults: %s", e)
-            products = list(DEFAULT_PRODUCTS)
-    else:
-        # Still read fees from config even when products are CLI-overridden
-        from config import load_config
-
-        try:
-            taker_bps = load_config(args.config).trading.fees.taker_bps
-        except Exception as e:
-            logger.debug("Config not loaded, using default fee: %s", e)
+    try:
+        config = load_config(args.config)
+    except Exception:
+        logger.error(
+            "Failed to load config from %s; refusing to start with an unknown fee "
+            "rate. Fix the config, or remove it to use defaults.", args.config,
+        )
+        raise
+    products = args.products or config.trading.coinbase_products or list(DEFAULT_PRODUCTS)
+    taker_bps = config.trading.fees.taker_bps
 
     client = Client.connect(args.bootstrap_servers)
     connector = CoinbaseKafkaConnector(

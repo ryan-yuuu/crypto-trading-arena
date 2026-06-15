@@ -16,6 +16,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from arena.fees import DEFAULT_TAKER_BPS, MAX_TAKER_BPS
+
 DEFAULT_CONFIG_PATH = Path("config.json")
 
 # Default coin pairs
@@ -68,9 +70,10 @@ class FeeConfig(BaseModel):
     """
 
     taker_bps: int = Field(
-        60,
+        DEFAULT_TAKER_BPS,
         description="Taker fee in basis points (60 bps = 0.60%). 0 disables fees.",
         ge=0,
+        le=MAX_TAKER_BPS,
     )
 
 

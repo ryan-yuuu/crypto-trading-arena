@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 
 from arena.fees import FeeModel
-from arena.models import AgentAccount, TradeRecorder, TradeResult
+from arena.models import AgentAccount, TradeLogEntry, TradeRecorder, TradeResult
 from arena.price_book import PriceBook
 
 log = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ class AccountStore:
 
     def __init__(self, price_book: PriceBook, fee_model: FeeModel | None = None) -> None:
         self._accounts: dict[str, AgentAccount] = {}
-        self._trade_log: list[tuple[str, str, str, str, float, float, float, float | None]] = []
+        self._trade_log: list[TradeLogEntry] = []
         self._price_book = price_book
         self._data_recorder: TradeRecorder | None = None
         self._fee_model = fee_model or FeeModel()
@@ -48,7 +48,7 @@ class AccountStore:
         return self._price_book
 
     @property
-    def trade_log(self) -> list[tuple[str, str, str, str, float, float, float, float | None]]:
+    def trade_log(self) -> list[TradeLogEntry]:
         return self._trade_log
 
     def execute_trade(
@@ -198,7 +198,9 @@ class AccountStore:
         latency: float | None = None,
     ) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
-        self._trade_log.append((ts, agent_id, action, product_id, quantity, price, fee, latency))
+        self._trade_log.append(
+            TradeLogEntry(ts, agent_id, action, product_id, quantity, price, fee, latency)
+        )
 
         if self._data_recorder is not None:
             account = self._accounts.get(agent_id)

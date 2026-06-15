@@ -47,8 +47,9 @@ One row is written per executed trade, immediately on execution.
 
 ```csv
 timestamp,agent_id,action,product_id,quantity,price,total_value,fee,cash_after,latency
+2026-02-26T14:28:03.111111,scalper,buy,SOL-USD,10.0,140.00,1400.00,8.40,98591.60,0.9
 2026-02-26T14:30:52.123456,momentum,buy,BTC-USD,0.5,64200.00,32100.00,192.60,67707.40,1.2
-2026-02-26T14:31:10.654321,scalper,sell,SOL-USD,10.0,142.50,1425.00,8.55,101416.45,0.8
+2026-02-26T14:31:10.654321,scalper,sell,SOL-USD,10.0,142.50,1425.00,8.55,100008.05,0.8
 ```
 
 ---
@@ -64,10 +65,10 @@ Periodic portfolio snapshots taken at the configured interval. The data is **den
 | `cash` | float | Agent's current cash balance |
 | `product_id` | string | Held asset (e.g. `BTC-USD`). Empty string if the agent has no positions |
 | `quantity` | float | Units held of this asset. `0.0` if no positions |
-| `cost_basis` | float | Total cost paid for this position (average cost method) |
+| `cost_basis` | float | Total cost paid for this position (average cost method), including capitalized buy fees |
 | `market_price` | float | Current market price per unit from the live price book |
 | `market_value` | float | `market_price * quantity` — current dollar value of the position |
-| `unrealized_pnl` | float | `market_value - cost_basis` — unrealized profit/loss on this position |
+| `unrealized_pnl` | float | `market_value - cost_basis` — unrealized profit/loss on this position (net of the capitalized entry fee, since cost basis includes it) |
 | `portfolio_value` | float | Agent's total portfolio value (cash + all positions at market). Repeated on every row for the agent |
 | `trade_count` | int | Total number of trades the agent has executed to date |
 | `realized_pnl` | float | Cumulative realized P&L from closed quantity, net of both entry and exit fees. Account-level; repeated on every row for the agent |
@@ -82,7 +83,7 @@ An agent holding 3 assets produces 3 rows per snapshot (one per asset), all shar
 ```csv
 timestamp,agent_id,cash,product_id,quantity,cost_basis,market_price,market_value,unrealized_pnl,portfolio_value,trade_count,realized_pnl,total_fees_paid
 2026-02-26T14:35:00.000000,momentum,67707.40,BTC-USD,0.5,32292.60,64500.00,32250.00,-42.60,99957.40,1,0.00,192.60
-2026-02-26T14:35:00.000000,scalper,101416.45,,0.0,0.0,0.0,0.0,0.0,101416.45,2,1416.45,33.55
+2026-02-26T14:35:00.000000,scalper,100008.05,,0.0,0.0,0.0,0.0,0.0,100008.05,2,8.05,16.95
 ```
 
 ---

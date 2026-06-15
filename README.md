@@ -233,4 +233,4 @@ For full CLI flags, config-based deployment options, and the config schema, see 
 | `arena/models.py` | `INITIAL_CASH` | `100_000.0` | Starting cash balance per agent |
 | `exchanges/coinbase.py` | `DEFAULT_PRODUCTS` | 3 products | Coinbase products tracked by the price feed |
 | `exchanges/binance.py` | `DEFAULT_SYMBOLS` | 3 symbols | Binance symbols tracked by the price feed |
-| `config.json` | `trading.fees.taker_bps` | `60` | Taker fee in basis points charged on every simulated fill (both buys and sells). `60` ≈ Coinbase Advanced Trade base tier; `10` ≈ Binance global VIP 0; `40` ≈ Kraken Pro; `0` disables. Read by both the trading tools and the price-feed connector. |
+| `config.json` | `trading.fees.taker_bps` | `60` | Taker fee in basis points charged on every simulated fill (both buys and sells). `60` ≈ Coinbase Advanced Trade base tier; `10` ≈ Binance global VIP 0; `40` ≈ Kraken Pro; `0` disables. Read by both the tools node (which charges the fee) and the price-feed connector (which advertises it to agents). |

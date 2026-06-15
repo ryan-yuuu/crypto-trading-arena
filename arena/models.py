@@ -51,6 +51,22 @@ class AgentAccount:
         return self.cost_basis.get(product_id, 0.0) / qty
 
 
+# ── Trade log ────────────────────────────────────────────────────
+
+
+class TradeLogEntry(typing.NamedTuple):
+    """One row of the in-memory trade log feeding the dashboard's recent-trades panel."""
+
+    timestamp: str
+    agent_id: str
+    action: str
+    product_id: str
+    quantity: float
+    price: float
+    fee: float
+    latency: float | None
+
+
 # ── Trade recorder protocol ──────────────────────────────────────
 
 
