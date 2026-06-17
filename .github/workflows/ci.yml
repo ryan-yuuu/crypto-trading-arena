@@ -34,6 +34,12 @@ jobs:
   unit:
     name: Unit tests (py3.10)
     runs-on: ubuntu-latest
+    # python-coverage-comment-action needs contents:write to commit the badge +
+    # data to the python-coverage-comment-action-data branch on pushes to main,
+    # and pull-requests:write to post the coverage comment on same-repo PRs.
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
@@ -44,8 +50,22 @@ jobs:
           python-version: "3.10"
       - name: Install dependencies
         run: uv sync --frozen
-      - name: Run non-LLM, non-broker tests
-        run: uv run pytest -m "not llm and not broker"
+      - name: Run non-LLM, non-broker tests with coverage
+        run: uv run pytest -m "not llm and not broker" --cov --cov-report=term-missing
+      - name: Coverage comment & badge
+        id: coverage_comment
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Thresholds set the badge colour only; they do not gate CI.
+          MINIMUM_GREEN: 80
+          MINIMUM_ORANGE: 60
+      - name: Store coverage comment (fork / Dependabot PRs)
+        uses: actions/upload-artifact@v4
+        if: steps.coverage_comment.outputs.COMMENT_FILE_WRITTEN == 'true'
+        with:
+          name: python-coverage-comment-action
+          path: python-coverage-comment-action.txt
 
   broker:
     name: Broker integration (Redpanda)

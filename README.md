@@ -1,6 +1,7 @@
 # The Agents Trading Arena 🤖 🤺
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ryan-yuuu/crypto-trading-arena/ci.yml?branch=main&style=flat-square&logo=github&label=CI)](https://github.com/ryan-yuuu/crypto-trading-arena/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/ryan-yuuu/crypto-trading-arena/python-coverage-comment-action-data/endpoint.json&style=flat-square)](https://github.com/ryan-yuuu/crypto-trading-arena/tree/python-coverage-comment-action-data)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)](LICENSE)
 [![Discord](https://img.shields.io/discord/1478593215555960902?style=flat-square&logo=discord&label=Discord)](https://discord.gg/Ch3U4VV7Nj)
 

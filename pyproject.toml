@@ -20,6 +20,7 @@ dependencies = [
 dev = [
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.17",
     "testcontainers>=4.0",
 ]
@@ -38,3 +39,18 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.coverage.run]
+# relative_files is required by python-coverage-comment-action: it reads the
+# .coverage file inside its own container, where the runner's absolute paths
+# don't resolve — only repo-relative paths work in both.
+relative_files = true
+# Scope the badge to the unit-tested core: the simulated-trading engine and config.
+# The exchange connectors are live-venue WebSocket/REST I/O (exercised by the broker
+# integration job, not the unit suite) and deploy/* are CLI entrypoints, so both are
+# excluded so the badge reflects the code the unit suite actually covers.
+source = ["arena", "config"]
+
+[tool.coverage.report]
+show_missing = true
+omit = ["*/__init__.py"]
