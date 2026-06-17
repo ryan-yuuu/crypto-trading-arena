@@ -1,5 +1,7 @@
 # The Agents Trading Arena 🤖 🤺
 
+[![CI](https://img.shields.io/github/actions/workflow/status/ryan-yuuu/crypto-trading-arena/ci.yml?branch=main&style=flat-square&logo=github&label=CI)](https://github.com/ryan-yuuu/crypto-trading-arena/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)](LICENSE)
 [![Discord](https://img.shields.io/discord/1478593215555960902?style=flat-square&logo=discord&label=Discord)](https://discord.gg/Ch3U4VV7Nj)
 
 A multi-agent crypto trading arena where AI agents compete against each other, trading with live crypto market data from Coinbase or Binance. Each agent consumes a livestream of ticker data and standard candlestick charts, has access to its portfolio and calculator, and executes trades autonomously. This is all built with [Calfkit](https://github.com/calf-ai/calfkit-sdk) agents, namely for their multi-agent orchestration and realtime data streaming functionality.
@@ -23,30 +25,37 @@ If you find this project interesting or useful, please consider:
 ## Architecture
 
 ```
-                         ┌──────────────────┐
-                         │    Agent(s)      │
-                         │ (LLM Inference)  │
-                         └──────────────────┘
-                                  ▲
-                                  │
-                                  ▼
-Live Market          ┌────────────────┐
-Data Stream  ──▶     │  Kafka Broker  │
-                     └────────────────┘
-                                  ▲
-                                  │
-                                  ▼
-                       ┌────────────────────────┐
-                       │ Tools & Dashboard      │
-                       │ (Trading Tools + UI)   │
-                       └────────────────────────┘
+                           Live market data
+                (Coinbase / Binance — WebSocket + REST)
+                                   │
+                                   ▼
+            ┌─────────────────────────────────────────────┐
+            │              Exchange connector             │
+            │           (live-market-data proxy)          │
+            └─────────────────────────────────────────────┘
+                  │                                │
+             live prices                   market snapshots
+                  ▼                                ▼
+   ┌────────────────────────────┐   ┌────────────────────────────┐
+   │     Tools & Dashboard      │   │     Agent process  × N     │
+   │   paper wallets · tools    │◀─▶│  embedded LLM + strategy   │
+   │   live dashboard (Rich)    │   │     agent 1 … agent N      │
+   └────────────────────────────┘   └────────────────────────────┘
+                     tool calls  ⇄  tool results
 ```
 
-Each box (or node) is an independent process communicating with eachother. Each node can run on the same machine, on separate servers, or across different cloud regions.
+A single **exchange connector** turns the live market into a continuous event stream
+that the agents and the Tools process consume in realtime. Each **agent** reacts on
+every update — reasoning over the latest prices and candlesticks to decide whether to
+buy, sell, or hold. The **Tools & Dashboard** process consumes the same stream to keep
+its price book current, so trades fill and the dashboard marks against up-to-the-moment
+prices. Agents act by calling tools (trade, portfolio, calculator), forming a tight
+loop: market event → decision → trade → updated state.
 
 Key design points:
+- **Connector as market-data proxy**: One process owns the exchange link and fans the feed out, so neither agents nor tools touch the exchange directly.
 - **Per-agent model selection**: Each agent embeds its own model client, so different agents can use different LLMs with different providers.
-- **Fan-out via consumer groups**: Every agent independently receives every market data update, with no replicated work.
+- **Fan-out**: Every agent independently receives every market-data update, with no replicated work.
 - **Shared tools via ToolContext**: A single deployed set of trading tools serves all agents — each tool resolves the calling agent's identity at runtime.
 - **Dynamic agent accounts**: Agents appear on the dashboard automatically on their first trade — no pre-registration needed.
 
