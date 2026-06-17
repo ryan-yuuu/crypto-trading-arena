@@ -1,0 +1,39 @@
+name: Post coverage comment
+
+# Posts the coverage comment for pull requests that ran with a read-only token
+# (forks and Dependabot). The CI "unit" job cannot comment on those PRs itself, so
+# it uploads the rendered comment as an artifact; this trusted workflow runs in the
+# base-repo context (where it has write permissions) and posts it.
+#
+# Security: triggered by workflow_run and only reads the artifact produced by the CI
+# run, handing it to python-coverage-comment-action. It runs with write permissions
+# in the base-repo context, so untrusted PR code must never reach it. DO NOT add
+# actions/checkout (or any step that runs PR code) here — doing so turns it into a
+# pwn-request vulnerability.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+# No workflow-level permissions; the single job opts in to exactly what it needs.
+permissions: {}
+
+jobs:
+  comment:
+    name: post coverage comment
+    runs-on: ubuntu-latest
+    # Only act on successful CI runs that came from a pull request.
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write # update the data branch / edit existing comments
+      pull-requests: write # post / update the coverage comment
+      actions: read # download the artifact from the triggering run
+    steps:
+      - name: Post comment
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PR_RUN_ID: ${{ github.event.workflow_run.id }}
