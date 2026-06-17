@@ -210,7 +210,12 @@ __marimo__/
 .DS_Store
 
 # Claude Code
-.claude/
+.claude/agents/
+.claude/agent-memory/
+.claude/worktrees/
+.claude/settings.local.json
+CLAUDE.local.md
+.claude/*.js
 
 # Data recorder CSV output
 data/
