@@ -4,7 +4,6 @@ Uses FastStream's TestKafkaBroker for in-memory Kafka simulation
 (no real broker required). Requires an OpenAI API key for LLM inference.
 """
 
-import asyncio
 import os
 
 import pytest
@@ -366,6 +365,7 @@ def test_fee_model_disclosure_prompt():
 # ── Tests ───────────────────────────────────────────────────────
 
 
+@pytest.mark.llm
 @pytest.mark.asyncio
 @skip_if_no_openai_key
 async def test_agent_executes_trade(deploy_client):
@@ -385,6 +385,7 @@ async def test_agent_executes_trade(deploy_client):
         assert account.trade_count > 0
 
 
+@pytest.mark.llm
 @pytest.mark.asyncio
 @skip_if_no_openai_key
 async def test_agent_checks_portfolio(deploy_client):
@@ -402,6 +403,7 @@ async def test_agent_checks_portfolio(deploy_client):
         assert "100,000" in str(result.output) or "100000" in str(result.output)
 
 
+@pytest.mark.llm
 @pytest.mark.asyncio
 @skip_if_no_openai_key
 async def test_multi_turn_trading(deploy_client):
@@ -431,6 +433,7 @@ async def test_multi_turn_trading(deploy_client):
         assert "sol" in str(result.output).lower(), "Portfolio should mention SOL position"
 
 
+@pytest.mark.llm
 @pytest.mark.asyncio
 @skip_if_no_openai_key
 async def test_agent_uses_calculator(deploy_client):
@@ -448,6 +451,7 @@ async def test_agent_uses_calculator(deploy_client):
         assert "5000" in str(result.output)
 
 
+@pytest.mark.llm
 @pytest.mark.asyncio
 @skip_if_no_openai_key
 async def test_full_trading_session(deploy_client):
@@ -491,6 +495,7 @@ async def test_full_trading_session(deploy_client):
         assert "btc" in str(result.output).lower()
 
 
+@pytest.mark.llm
 @pytest.mark.asyncio
 @skip_if_no_openai_key
 async def test_autonomous_portfolio_check_and_trade(deploy_client):

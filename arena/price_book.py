@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
 
-from arena.models import Candle, Timeframe, TIMEFRAMES
+from arena.models import Candle, TIMEFRAMES
 
 log = logging.getLogger(__name__)
 

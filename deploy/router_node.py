@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 from calfkit import Agent, Client, OpenAIModelClient, Worker
 from arena.tools import calculator, execute_trade, get_portfolio
 from arena.strategies import STRATEGIES
-from config import load_config, PROVIDER_DEFAULTS
+from config import load_config
 
 load_dotenv()
 
@@ -160,7 +160,7 @@ async def main() -> None:
     print(f"  - Agent:    {args.name}")
     print(f"  - Strategy: {args.strategy}")
     print(f"  - Model:    {args.model_id}")
-    print(f"  - Input:    agent_router.input")
+    print("  - Input:    agent_router.input")
     print(f"  - Tools:    {tool_names}")
     if args.base_url:
         print(f"  - Base URL: {args.base_url}")
