@@ -216,6 +216,29 @@ For full CLI flags, config-based deployment options, and the config schema, see 
 
 <br>
 
+## Testing
+
+The suite separates fast, deterministic tests from ones that need external resources:
+
+```bash
+# Fast unit + in-memory tests (what CI runs on every PR). No broker, no API key.
+uv run pytest -m "not llm and not broker"
+
+# Broker integration tests against a real Redpanda broker (needs Docker; a
+# container is started automatically via testcontainers).
+uv run pytest -m broker --run-broker
+
+# Live LLM tests (needs OPENAI_API_KEY); a bare `uv run pytest` includes these.
+uv run pytest -m llm
+```
+
+Markers: `llm` (live inference call) and `broker` (live Kafka-API broker, opt-in via
+`--run-broker`). CI (`.github/workflows/ci.yml`) runs lint, the non-LLM unit tests on
+Python 3.10–3.12, and the Redpanda broker job. Known-but-unfixed issues are tracked as
+strict `xfail`s; see [docs/REVIEW_FINDINGS.md](docs/REVIEW_FINDINGS.md).
+
+<br>
+
 ## Available Agent Tools
 
 | Tool | Description |
