@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "diataxis-docs-writer": {
+      "source": "ryan-yuuu/skills-for-dummies",
+      "sourceType": "github",
+      "skillPath": "skills/diataxis-docs-writer/SKILL.md",
+      "computedHash": "e7f9863312a0e89ef05f727d62ee21f5b0b885d7fe50917dd3211db1750354db"
+    },
+    "grill-with-docs": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/grill-with-docs/SKILL.md",
+      "computedHash": "eb0e91e84277283dc2b23ed544399e53afd6b5287e5b6929f25fe8aa608e164b"
+    },
+    "pytest-coverage": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/pytest-coverage/SKILL.md",
+      "computedHash": "06481f4bbc6d80a52091ec9ba5856eb1dc5f80cbabb40fd4ad02aaea3085a0dc"
+    },
+    "test-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/test-driven-development/SKILL.md",
+      "computedHash": "eee144aea35d783296d178017e9fe843c6d16cc8b240e106f5e50910f6caf329"
+    },
+    "uv": {
+      "source": "astral-sh/claude-code-plugins",
+      "sourceType": "github",
+      "skillPath": "plugins/astral/skills/uv/SKILL.md",
+      "computedHash": "b1ca9e9826d906f6ee6ea172da50018ec13bb622ac9ba7204bda8b10e7fc8d0a"
+    }
+  }
+}
