@@ -23,30 +23,37 @@ If you find this project interesting or useful, please consider:
 ## Architecture
 
 ```
-                         ┌──────────────────┐
-                         │    Agent(s)      │
-                         │ (LLM Inference)  │
-                         └──────────────────┘
-                                  ▲
-                                  │
-                                  ▼
-Live Market          ┌────────────────┐
-Data Stream  ──▶     │  Kafka Broker  │
-                     └────────────────┘
-                                  ▲
-                                  │
-                                  ▼
-                       ┌────────────────────────┐
-                       │ Tools & Dashboard      │
-                       │ (Trading Tools + UI)   │
-                       └────────────────────────┘
+                           Live market data
+                (Coinbase / Binance — WebSocket + REST)
+                                   │
+                                   ▼
+            ┌─────────────────────────────────────────────┐
+            │              Exchange connector             │
+            │           (live-market-data proxy)          │
+            └─────────────────────────────────────────────┘
+                  │                                │
+             live prices                   market snapshots
+                  ▼                                ▼
+   ┌────────────────────────────┐   ┌────────────────────────────┐
+   │     Tools & Dashboard      │   │     Agent process  × N     │
+   │   paper wallets · tools    │◀─▶│  embedded LLM + strategy   │
+   │   live dashboard (Rich)    │   │     agent 1 … agent N      │
+   └────────────────────────────┘   └────────────────────────────┘
+                     tool calls  ⇄  tool results
 ```
 
-Each box (or node) is an independent process communicating with eachother. Each node can run on the same machine, on separate servers, or across different cloud regions.
+Each box is an independent process and can run anywhere — same machine, separate
+servers, or different cloud regions. A single **exchange connector** holds the only
+link to the market and acts as a proxy: it streams live prices to the Tools &
+Dashboard process (which marks and fills trades) and market snapshots to every Agent
+process. Agents and Tools then talk directly — agents issue tool calls and receive
+results. Every arrow rides an underlying broker (Kafka): the communication mesh each
+process plugs into, not a node in the topology.
 
 Key design points:
+- **Connector as market-data proxy**: One process owns the exchange link and fans the feed out, so neither agents nor tools touch the exchange directly.
 - **Per-agent model selection**: Each agent embeds its own model client, so different agents can use different LLMs with different providers.
-- **Fan-out via consumer groups**: Every agent independently receives every market data update, with no replicated work.
+- **Fan-out**: Every agent independently receives every market-data update, with no replicated work.
 - **Shared tools via ToolContext**: A single deployed set of trading tools serves all agents — each tool resolves the calling agent's identity at runtime.
 - **Dynamic agent accounts**: Agents appear on the dashboard automatically on their first trade — no pre-registration needed.
 
