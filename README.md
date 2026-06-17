@@ -42,13 +42,13 @@ If you find this project interesting or useful, please consider:
                      tool calls  ⇄  tool results
 ```
 
-Each box is an independent process and can run anywhere — same machine, separate
-servers, or different cloud regions. A single **exchange connector** holds the only
-link to the market and acts as a proxy: it streams live prices to the Tools &
-Dashboard process (which marks and fills trades) and market snapshots to every Agent
-process. Agents and Tools then talk directly — agents issue tool calls and receive
-results. Every arrow rides an underlying broker (Kafka): the communication mesh each
-process plugs into, not a node in the topology.
+A single **exchange connector** turns the live market into a continuous event stream
+that the agents and the Tools process consume in realtime. Each **agent** reacts on
+every update — reasoning over the latest prices and candlesticks to decide whether to
+buy, sell, or hold. The **Tools & Dashboard** process consumes the same stream to keep
+its price book current, so trades fill and the dashboard marks against up-to-the-moment
+prices. Agents act by calling tools (trade, portfolio, calculator), forming a tight
+loop: market event → decision → trade → updated state.
 
 Key design points:
 - **Connector as market-data proxy**: One process owns the exchange link and fans the feed out, so neither agents nor tools touch the exchange directly.
