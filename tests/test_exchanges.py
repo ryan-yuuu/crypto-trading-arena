@@ -16,7 +16,7 @@ import pytest
 from arena.fees import FeeModel
 from arena.models import TIMEFRAMES
 from arena.price_book import CandleBook
-from exchanges import TickerMessage
+from exchanges import AGENT_OUTPUT_TOPIC, TickerMessage
 from exchanges import coinbase as cb
 from exchanges import binance as bn
 from exchanges.binance import BINANCE_INTERVAL_MAP, BinanceKafkaConnector, parse_binance_candle
@@ -186,12 +186,16 @@ def _capturing(captured):
 
 
 def _stub_run_env(monkeypatch, module):
-    """Stub broker connect, env, and signal-handler registration for a run() call."""
+    """Stub broker connect, env, and signal-handler registration for a run() call.
+
+    Returns (connector_kwargs, connect_kwargs) captured during the run() call."""
     captured = {}
+    connect_kwargs = {}
 
     class _Client:
         @staticmethod
-        def connect(servers, **kwargs):  # run() now passes inbox_topic=
+        def connect(servers, **kwargs):
+            connect_kwargs.update(kwargs)
             return object()
 
     monkeypatch.setenv("OPENAI_API_KEY", "dummy")  # config.json references it
@@ -200,16 +204,18 @@ def _stub_run_env(monkeypatch, module):
     monkeypatch.setattr(
         asyncio.get_running_loop(), "add_signal_handler", lambda *a, **k: None
     )
-    return captured
+    return captured, connect_kwargs
 
 
 async def test_binance_run_wires_a_candle_book(monkeypatch):
-    captured = _stub_run_env(monkeypatch, bn)
+    captured, connect_kwargs = _stub_run_env(monkeypatch, bn)
     monkeypatch.setattr(bn, "BinanceKafkaConnector", _capturing(captured))
     args = SimpleNamespace(
         config="config.json", symbols=["BTCUSDT"], min_interval=60.0, bootstrap_servers="x"
     )
     await bn.run(args)
+    # The connector must bind the shared inbox so the viewer can observe agent events.
+    assert connect_kwargs.get("inbox_topic") == AGENT_OUTPUT_TOPIC
     assert captured.get("candle_book") is not None
 
 
@@ -218,10 +224,11 @@ async def test_binance_run_wires_a_candle_book(monkeypatch):
     strict=True,
 )
 async def test_coinbase_run_wires_a_candle_book(monkeypatch):
-    captured = _stub_run_env(monkeypatch, cb)
+    captured, connect_kwargs = _stub_run_env(monkeypatch, cb)
     monkeypatch.setattr(cb, "CoinbaseKafkaConnector", _capturing(captured))
     args = SimpleNamespace(
         config="config.json", products=["BTC-USD"], min_interval=60.0, bootstrap_servers="x"
     )
     await cb.run(args)
+    assert connect_kwargs.get("inbox_topic") == AGENT_OUTPUT_TOPIC
     assert captured.get("candle_book") is not None

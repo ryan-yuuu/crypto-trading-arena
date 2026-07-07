@@ -3,9 +3,10 @@ activity (tool calls, text responses, and tool results) as they happen, via calf
 typed caller-side event firehose (``client.events()``).
 
 Agents route their per-turn step events to the *invoker's* inbox. The exchange connector
-connects with ``inbox_topic="agent_router.output"`` (a shared, durable inbox — see
-docs/calfkit-0.12-migration.md, Phase 2), so this viewer — binding the same inbox — sees
-every agent's activity through the typed ``RunEvent`` stream, with no envelope internals.
+connects with ``inbox_topic="agent_router.output"`` (a shared, stable-named inbox with
+best-effort/latest delivery — see docs/calfkit-0.12-migration.md, Phase 2), so this viewer —
+binding the same inbox — sees every agent's activity through the typed ``RunEvent`` stream,
+with no envelope internals.
 
 Run this in a separate terminal alongside the main tools_and_dashboard to get visibility
 into agent reasoning.
@@ -34,7 +35,7 @@ from rich.panel import Panel
 from rich.table import Table, box
 from rich.text import Text
 
-from calfkit import AgentMessageEvent, Client, ToolCallEvent, ToolResultEvent
+from calfkit import AgentMessageEvent, Client, RunFailed, ToolCallEvent, ToolResultEvent
 from calfkit.models.payload import DataPart, FilePart, TextPart, ToolCallPart
 
 from exchanges import AGENT_OUTPUT_TOPIC
@@ -51,7 +52,7 @@ logger = logging.getLogger(__name__)
 class ActivityEntry:
     timestamp: str  # HH:MM:SS
     agent_name: str
-    kind: str  # "TOOL CALL", "RESPONSE", "TOOL RESULT"
+    kind: str  # "TOOL CALL", "RESPONSE", "TOOL RESULT", "RUN FAILED"
     details: str  # Formatted display string
 
 
@@ -61,6 +62,7 @@ KIND_STYLES: dict[str, str] = {
     "TOOL CALL": "bold yellow",
     "RESPONSE": "bold green",
     "TOOL RESULT": "bold blue",
+    "RUN FAILED": "bold red",
 }
 
 
@@ -73,6 +75,7 @@ class ActivityView:
     def __init__(self) -> None:
         self._log: list[ActivityEntry] = []
         self._live: Live | None = None
+        self.dropped: int = 0  # cumulative events dropped by the best-effort firehose
 
     def attach_live(self, live: Live) -> None:
         self._live = live
@@ -103,11 +106,13 @@ class ActivityView:
     def _build_header(self) -> Panel:
         now = datetime.now().strftime("%H:%M:%S")
         count = len(self._log)
+        # Surface firehose loss so a silently-incomplete feed is visible, not assumed whole.
+        dropped = f"  [bold red]⚠ {self.dropped} dropped[/]" if self.dropped else ""
         return Panel(
             Text.from_markup(
                 "[bold cyan]Agent Activity Viewer[/]  [bold red]●[/] "
                 f"[bold green]LIVE[/]  [dim]|  {now}  |  "
-                f"{count} event{'s' if count != 1 else ''}[/]"
+                f"{count} event{'s' if count != 1 else ''}[/]" + dropped
             ),
             style="cyan",
             height=3,
@@ -176,6 +181,13 @@ def _format_tool_result(event: ToolResultEvent) -> str:
     return f"{prefix}{event.name} → {_truncate(_parts_to_text(event.parts), 200)}"
 
 
+def _format_run_failed(event: RunFailed) -> tuple[str, str]:
+    """Return (agent, detail) for a failed run. RunFailed carries an ErrorReport
+    (origin_node_id is the failing node), not an emitter."""
+    report = event.report
+    return report.origin_node_id or "unknown", f"{report.error_type}: {report.message}"
+
+
 # ── CLI ──────────────────────────────────────────────────────────
 
 
@@ -200,10 +212,17 @@ async def main() -> None:
     args = parse_args()
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.WARNING,
         format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
         datefmt="%H:%M:%S",
     )
+    # This is a full-screen Rich Live dashboard; any stderr log line corrupts it. Quiet the
+    # chatty broker/hub loggers — routine "Received/Processed" traffic and the hub's per-reply
+    # "no pending handle" notices (this observer client holds no run handles). Genuine agent
+    # faults are surfaced in-panel via the RUN FAILED row below, not on stderr.
+    logging.getLogger("calfkit.client.hub").setLevel(logging.CRITICAL)
+    for _noisy in ("faststream", "aiokafka"):
+        logging.getLogger(_noisy).setLevel(logging.ERROR)
 
     print("=" * 50)
     print("Agent Activity Viewer")
@@ -216,20 +235,35 @@ async def main() -> None:
 
     print(f"\nObserving agent activity on {AGENT_OUTPUT_TOPIC} (typed event firehose)...")
 
+    # A ToolResultEvent's emitter is the tool node, not the invoking agent; map each
+    # tool_call_id back to the agent from its ToolCallEvent. Self-cleaning (popped on the
+    # result), so it only ever holds in-flight calls.
+    pending_agent: dict[str, str] = {}
+
     with Live(view._build_layout(), auto_refresh=False, screen=True) as live:
         view.attach_live(live)
         async with client.events() as stream:
             async for event in stream:
-                match event:
-                    case ToolCallEvent():
-                        view.record(event.emitter, "TOOL CALL", _format_tool_call(event))
-                    case ToolResultEvent():
-                        view.record(event.emitter, "TOOL RESULT", _format_tool_result(event))
-                    case AgentMessageEvent():
-                        text = _parts_to_text(event.parts).strip()
-                        if text:
-                            view.record(event.emitter, "RESPONSE", text)
-                    # RunCompleted / RunFailed terminals are not part of the activity feed.
+                view.dropped = stream.dropped
+                try:
+                    match event:
+                        case ToolCallEvent():
+                            pending_agent[event.tool_call_id] = event.emitter
+                            view.record(event.emitter, "TOOL CALL", _format_tool_call(event))
+                        case ToolResultEvent():
+                            agent = pending_agent.pop(event.tool_call_id, event.emitter)
+                            view.record(agent, "TOOL RESULT", _format_tool_result(event))
+                        case AgentMessageEvent():
+                            text = _parts_to_text(event.parts).strip()
+                            if text:
+                                view.record(event.emitter, "RESPONSE", text)
+                        case RunFailed():
+                            agent, detail = _format_run_failed(event)
+                            view.record(agent, "RUN FAILED", detail)
+                        # RunCompleted / HandoffEvent are not part of the activity feed.
+                except Exception:
+                    # One malformed/edge-case event must never kill the whole dashboard.
+                    logger.exception("Skipped an unrenderable %s event", type(event).__name__)
 
 
 if __name__ == "__main__":

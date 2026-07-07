@@ -137,3 +137,37 @@ async def test_connector_publishes_invoke_to_agent_topic(client):
     payload = received[0].model_dump_json()
     assert "SENTINEL-INVOKE" in payload
     assert "60 bps" in payload
+    # The connector-stamped deps survive serialization, so ctx.deps.get("invoked_at")
+    # resolves in the tool (the latency stopwatch). The read side is covered by test_tools.
+    assert "invoked_at" in payload
+
+
+async def test_connector_invoke_fans_out_to_all_agent_groups(client):
+    """The connector's send() to AGENT_INPUT_TOPIC reaches EVERY consumer group — the
+    broadcast the arena relies on so every agent sees every tick (constraint #2 / ADR 0001).
+    Two distinct groups on the agent topic must both receive one connector publish; a
+    regression to client.agent(<name>) (a per-agent private topic) would fail this."""
+    group_a = asyncio.Event()
+    group_b = asyncio.Event()
+
+    @client.broker.subscriber(AGENT_TOPIC, group_id="it-agentfan-a", auto_offset_reset="earliest")
+    async def handle_a(envelope: Envelope) -> None:
+        if "SENTINEL-AGENTFAN" in envelope.model_dump_json():
+            group_a.set()
+
+    @client.broker.subscriber(AGENT_TOPIC, group_id="it-agentfan-b", auto_offset_reset="earliest")
+    async def handle_b(envelope: Envelope) -> None:
+        if "SENTINEL-AGENTFAN" in envelope.model_dump_json():
+            group_b.set()
+
+    await client.broker.start()
+
+    connector = CoinbaseKafkaConnector(
+        client, AGENT_TOPIC, ["SENTINEL-AGENTFAN"], FeeModel(taker_bps=0)
+    )
+    connector._latest = {"SENTINEL-AGENTFAN": _ticker("SENTINEL-AGENTFAN")}
+    await connector._publish_latest()
+
+    await asyncio.wait_for(
+        asyncio.gather(group_a.wait(), group_b.wait()), timeout=WAIT_TIMEOUT
+    )

@@ -18,4 +18,6 @@ calfkit 0.12's `client.agent(<name>)` derives a *per-agent private* input topic
 **one** agent, silently collapsing the broadcast the arena is built on. The `topic=` form is
 a deliberate, load-bearing deviation — do not "simplify" it to name addressing. The topic
 name is a cross-process wire contract, centralized as `AGENT_INPUT_TOPIC` in
-`exchanges/__init__.py`, and asserted by `tests/test_broker_integration.py::test_consumer_group_fanout`.
+`exchanges/__init__.py`, and guarded by
+`tests/test_broker_integration.py::test_connector_invoke_fans_out_to_all_agent_groups` (the
+connector's `send()` reaching two distinct consumer groups on the agent topic over real Kafka).

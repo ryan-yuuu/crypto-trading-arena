@@ -12,7 +12,7 @@
 - **Phase 1 (unbreak)** — ✅ all 6 breaking-change items migrated (TDD). Verified: unit suite
   **131 passed**; broker-integration suite **3 passed** against real Redpanda (random port);
   in-memory `send()` smoke; ruff clean.
-- **Phase 2 (viewer rewrite)** — ✅ `response_viewer.py` 287→239 LOC, vendored-`pydantic_ai`
+- **Phase 2 (viewer rewrite)** — ✅ `response_viewer.py` 286→239 LOC, vendored-`pydantic_ai`
   import eliminated; connectors bind `inbox_topic=AGENT_OUTPUT_TOPIC`. Verified **end-to-end**
   (real Redpanda + real gpt-5-nano): a separate viewer client observed a live agent's
   `ToolCallEvent`/`ToolResultEvent` via `client.events()` while the connector's `send()`
@@ -25,6 +25,13 @@
 - **Phase 4 (docs + ADRs)** — ✅ ADRs `docs/adr/0001` (broadcast via `topic=` escape hatch) and
   `docs/adr/0002` (viewer via shared inbox + `events()`). README/CLI_REFERENCE viewer sections
   are still accurate (CLI unchanged); `deploy/router_node.py`→`deploy/agent.py` rename done.
+- **Post-review hardening** — ✅ a deep multi-agent review round found and fixed: the periodic
+  publish loop now guards `send()` failures (was a silent multi-hour trading halt if `send()`
+  raised); the viewer isolates per-event render errors, surfaces the dropped-event counter,
+  renders `RUN FAILED` rows, and restores tool-result→agent attribution via `tool_call_id`
+  correlation; connector + viewer quiet the shared-inbox hub log spam. Added tests: agent-topic
+  fan-out (real broker), `invoked_at` wire survival, `inbox_topic` binding, and 8 viewer-formatter
+  unit tests. Suite: **143 passed**.
 
 ---
 
@@ -120,7 +127,8 @@ primitives — **without changing how the arena trades**.
 
 ## 5. Code-reduction opportunities
 
-- **`response_viewer.py` ~287 → ~140 LOC.** Delete the 5 vendored `pydantic_ai` imports, the
+- **`response_viewer.py` 286 → 239 LOC (−47 net; ~115 lines of introspection deleted, partly
+  offset by explanatory comments + the post-review hardening).** Delete the 5 vendored `pydantic_ai` imports, the
   `Envelope` import, `_extract_agent_name` (`event.emitter` replaces it), the `_seen` dedup
   (each event is emitted once), the `FastStream` app, and the `isinstance` message-part
   branching (→ `match event`). Keep only the Rich `ActivityView` and the event→row mapping.
@@ -229,9 +237,9 @@ The dependency bump is already committed to the working tree.
 | Risk | Mitigation |
 |------|------------|
 | Mixed-version fleet → envelope-incompatible silent failures | Lockstep deploy; document in rollout runbook. |
-| Naive `agent(name)` breaks broadcast fan-out | Centralized `AGENT_INPUT_TOPIC` + `agent(topic=…)`; assert in a broker test. |
+| Naive `agent(name)` breaks broadcast fan-out | Centralized `AGENT_INPUT_TOPIC` + `agent(topic=…)`; guarded by `test_connector_invoke_fans_out_to_all_agent_groups` (broker test). |
 | `invoked_at` latency dep silently becomes `None` if only one side migrates | Read + write change land in the same PR; keep the existing `None`-guard; add an assertion. |
-| `events()` best-effort drop under load | Acceptable for a live view; note `.dropped` counter; `@consumer` if durable capture is later needed. |
+| `events()` best-effort drop under load | Acceptable for a live view; the viewer surfaces the `.dropped` counter in its header; `@consumer` if durable capture is later needed. |
 | `ck run` doesn't fit dynamic config | Gated; fall back to argparse + lifecycle cleanup only. |
 
 ## 10. Decisions to capture as ADRs (Phase 4)

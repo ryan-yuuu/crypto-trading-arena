@@ -2,7 +2,7 @@
 
 Runs one agent per process (launch this module once per agent). Despite the
 ``agent_router.*`` topic names, this process does no routing itself — it hosts
-exactly one Agent node in a Worker.
+one Agent node (plus its tool nodes) in a Worker.
 
 Each agent subscribes to the shared ``agent_router.input`` topic with its
 own consumer group, so every agent receives every market tick independently.
@@ -165,7 +165,7 @@ async def main() -> None:
     print(f"  - Agent:    {args.name}")
     print(f"  - Strategy: {args.strategy}")
     print(f"  - Model:    {args.model_id}")
-    print("  - Input:    agent_router.input")
+    print(f"  - Input:    {AGENT_INPUT_TOPIC}")
     print(f"  - Tools:    {tool_names}")
     if args.base_url:
         print(f"  - Base URL: {args.base_url}")

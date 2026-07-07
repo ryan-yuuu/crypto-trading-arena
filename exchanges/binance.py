@@ -347,7 +347,17 @@ class BinanceKafkaConnector:
         interval = max(self._min_interval, 1.0)
         while self._running:
             await asyncio.sleep(interval)
-            await self._publish_latest()
+            try:
+                await self._publish_latest()
+            except Exception:
+                # A transient broker/publish error must NOT kill this loop: otherwise
+                # agents stop being invoked for the lifetime of the WebSocket connection
+                # (a silent trading halt while prices keep flowing to the dashboard).
+                # Log and retry on the next interval.
+                logger.exception(
+                    "Periodic agent invoke failed; agents were not invoked this cycle. "
+                    "Retrying in %.0fs.", interval,
+                )
 
     async def _ping_loop(self, ws: websockets.ClientConnection) -> None:
         """Send ping frames periodically to keep connection alive."""
@@ -559,6 +569,11 @@ def main() -> None:
         format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
         datefmt="%H:%M:%S",
     )
+    # This producer binds inbox_topic=agent_router.output (so the viewer can observe agent
+    # step events) but never reads replies (fire-and-forget send), so every agent reply
+    # landing on that inbox logs a hub "no pending handle" WARNING. Quiet it so it doesn't
+    # drown genuine connector logs. See docs/adr/0002 (operational cost).
+    logging.getLogger("calfkit.client.hub").setLevel(logging.ERROR)
 
     asyncio.run(run(args))
 
