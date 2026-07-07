@@ -94,11 +94,7 @@ After installation, restart your terminal.
 
 ### 2. Install the Calfkit SDK
 
-```bash
-uv add calfkit@latest
-```
-
-[Calfkit](https://github.com/calf-ai/calfkit-sdk) is the event-stream SDK that powers this project. It handles the agent realtime stream consumption and orechestration.
+[Calfkit](https://github.com/calf-ai/calfkit-sdk) is the event-stream SDK that powers this project — it handles the agents' realtime stream consumption and orchestration. It's already a pinned dependency (`calfkit>=0.12.6,<0.13` in `pyproject.toml`), installed along with everything else by `uv sync` in the [Quickstart](#quickstart) below.
 
 <br>
 
