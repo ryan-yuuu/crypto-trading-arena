@@ -38,7 +38,7 @@ from rich.text import Text
 from calfkit import AgentMessageEvent, Client, RunFailed, ToolCallEvent, ToolResultEvent
 from calfkit.models.payload import DataPart, FilePart, TextPart, ToolCallPart
 
-from exchanges import AGENT_OUTPUT_TOPIC
+from exchanges import AGENT_OUTPUT_TOPIC, quiet_shared_inbox_reply_log
 
 load_dotenv()
 
@@ -64,6 +64,10 @@ KIND_STYLES: dict[str, str] = {
     "TOOL RESULT": "bold blue",
     "RUN FAILED": "bold red",
 }
+
+# Cap rows built per redraw: only a screenful is ever shown, so rendering the whole
+# (unbounded) history each event would be O(n) per event for nothing.
+_MAX_VISIBLE_ROWS = 200
 
 
 # ── Rich Live view ───────────────────────────────────────────────
@@ -128,7 +132,7 @@ class ActivityView:
         if not self._log:
             table.add_row("[dim italic]Waiting for agent activity...[/]", "", "", "")
         else:
-            for entry in reversed(self._log):
+            for entry in reversed(self._log[-_MAX_VISIBLE_ROWS:]):
                 style = KIND_STYLES.get(entry.kind, "")
                 kind_text = Text(entry.kind, style=style)
                 table.add_row(entry.timestamp, entry.agent_name, kind_text, entry.details.strip())
@@ -177,7 +181,7 @@ def _format_tool_call(event: ToolCallEvent) -> str:
 
 
 def _format_tool_result(event: ToolResultEvent) -> str:
-    prefix = "⚠ " if event.is_error else ""  # ⚠ for tool errors
+    prefix = "⚠ " if event.is_error else ""
     return f"{prefix}{event.name} → {_truncate(_parts_to_text(event.parts), 200)}"
 
 
@@ -220,7 +224,7 @@ async def main() -> None:
     # chatty broker/hub loggers — routine "Received/Processed" traffic and the hub's per-reply
     # "no pending handle" notices (this observer client holds no run handles). Genuine agent
     # faults are surfaced in-panel via the RUN FAILED row below, not on stderr.
-    logging.getLogger("calfkit.client.hub").setLevel(logging.CRITICAL)
+    quiet_shared_inbox_reply_log(logging.CRITICAL)
     for _noisy in ("faststream", "aiokafka"):
         logging.getLogger(_noisy).setLevel(logging.ERROR)
 
@@ -236,8 +240,8 @@ async def main() -> None:
     print(f"\nObserving agent activity on {AGENT_OUTPUT_TOPIC} (typed event firehose)...")
 
     # A ToolResultEvent's emitter is the tool node, not the invoking agent; map each
-    # tool_call_id back to the agent from its ToolCallEvent. Self-cleaning (popped on the
-    # result), so it only ever holds in-flight calls.
+    # tool_call_id back to the agent from its ToolCallEvent, popped when the result arrives.
+    # (A firehose-dropped result would orphan its entry — acceptable for a live dashboard.)
     pending_agent: dict[str, str] = {}
 
     with Live(view._build_layout(), auto_refresh=False, screen=True) as live:

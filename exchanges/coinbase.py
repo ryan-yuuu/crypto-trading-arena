@@ -25,7 +25,13 @@ from calfkit import Client
 from arena.fees import FeeModel
 from arena.models import Candle, TIMEFRAMES
 from arena.price_book import CandleBook
-from exchanges import AGENT_INPUT_TOPIC, AGENT_OUTPUT_TOPIC, PRICE_TOPIC, TickerMessage
+from exchanges import (
+    AGENT_INPUT_TOPIC,
+    AGENT_OUTPUT_TOPIC,
+    PRICE_TOPIC,
+    TickerMessage,
+    quiet_shared_inbox_reply_log,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -371,11 +377,9 @@ def main() -> None:
         format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
         datefmt="%H:%M:%S",
     )
-    # This producer binds inbox_topic=agent_router.output (so the viewer can observe agent
-    # step events) but never reads replies (fire-and-forget send), so every agent reply
-    # landing on that inbox logs a hub "no pending handle" WARNING. Quiet it so it doesn't
-    # drown genuine connector logs. See docs/adr/0002 (operational cost).
-    logging.getLogger("calfkit.client.hub").setLevel(logging.ERROR)
+    # Fire-and-forget producer bound to the shared inbox (agent_router.output): quiet the
+    # per-reply "no pending handle" notices so they don't drown genuine connector logs.
+    quiet_shared_inbox_reply_log()
 
     asyncio.run(run(args))
 
