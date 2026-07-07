@@ -15,12 +15,12 @@ from calfkit import Agent, Client, OpenAIModelClient, Worker
 from arena.fees import MAX_TAKER_BPS, FeeModel, Fill
 from arena.models import INITIAL_CASH
 from arena.tools import calculator, execute_trade, get_portfolio, price_book, store
+from exchanges import AGENT_INPUT_TOPIC
 
 load_dotenv()
 
 # The deployed agent processes all requests; trades are recorded under its name.
 AGENT_NAME = "arena_agent"
-AGENT_INPUT_TOPIC = "agent_router.input"
 
 skip_if_no_openai_key = pytest.mark.skipif(
     not os.getenv("OPENAI_API_KEY"),
@@ -86,7 +86,7 @@ def deploy_client() -> Client:
     Registers: Agent (with embedded model client) and tool nodes.
     The agent processes all incoming requests via the Worker.
 
-    NOTE: temp_instructions on execute_node() are silently dropped by
+    NOTE: temp_instructions on client.agent(...).execute() are silently dropped by
     pydantic-ai's UserPromptNode — only the Agent's system_prompt reaches
     the model. This system_prompt must work for all tests.
     """
@@ -373,9 +373,8 @@ async def test_agent_executes_trade(deploy_client):
     client = deploy_client
 
     async with TestKafkaBroker(client.broker):
-        await client.execute_node(
-            user_prompt="Buy 0.1 BTC-USD right now.",
-            topic=AGENT_INPUT_TOPIC,
+        await client.agent(topic=AGENT_INPUT_TOPIC).execute(
+            "Buy 0.1 BTC-USD right now.",
             timeout=30.0,
         )
 
@@ -393,9 +392,8 @@ async def test_agent_checks_portfolio(deploy_client):
     client = deploy_client
 
     async with TestKafkaBroker(client.broker):
-        result = await client.execute_node(
-            user_prompt="What does my portfolio look like?",
-            topic=AGENT_INPUT_TOPIC,
+        result = await client.agent(topic=AGENT_INPUT_TOPIC).execute(
+            "What does my portfolio look like?",
             timeout=30.0,
         )
 
@@ -412,9 +410,8 @@ async def test_multi_turn_trading(deploy_client):
 
     async with TestKafkaBroker(client.broker):
         # Turn 1: Buy SOL
-        result = await client.execute_node(
-            user_prompt="Buy 5 SOL-USD",
-            topic=AGENT_INPUT_TOPIC,
+        result = await client.agent(topic=AGENT_INPUT_TOPIC).execute(
+            "Buy 5 SOL-USD",
             timeout=30.0,
         )
 
@@ -422,9 +419,8 @@ async def test_multi_turn_trading(deploy_client):
         assert account.positions.get("SOL-USD", 0) > 0, "Should have bought SOL"
 
         # Turn 2: Check portfolio (pass message_history for multi-turn)
-        result = await client.execute_node(
-            user_prompt="Show me my current portfolio",
-            topic=AGENT_INPUT_TOPIC,
+        result = await client.agent(topic=AGENT_INPUT_TOPIC).execute(
+            "Show me my current portfolio",
             message_history=result.message_history,
             timeout=30.0,
         )
@@ -441,9 +437,8 @@ async def test_agent_uses_calculator(deploy_client):
     client = deploy_client
 
     async with TestKafkaBroker(client.broker):
-        result = await client.execute_node(
-            user_prompt="Use the calculator to compute 50000 * 0.1",
-            topic=AGENT_INPUT_TOPIC,
+        result = await client.agent(topic=AGENT_INPUT_TOPIC).execute(
+            "Use the calculator to compute 50000 * 0.1",
             timeout=30.0,
         )
 
@@ -460,9 +455,8 @@ async def test_full_trading_session(deploy_client):
 
     async with TestKafkaBroker(client.broker):
         # Buy BTC
-        result = await client.execute_node(
-            user_prompt="Buy 0.5 BTC-USD",
-            topic=AGENT_INPUT_TOPIC,
+        result = await client.agent(topic=AGENT_INPUT_TOPIC).execute(
+            "Buy 0.5 BTC-USD",
             timeout=30.0,
         )
 
@@ -472,9 +466,8 @@ async def test_full_trading_session(deploy_client):
         assert account.cash == pytest.approx(INITIAL_CASH - expected_cost, rel=1e-2)
 
         # Sell some
-        result = await client.execute_node(
-            user_prompt="Sell 0.2 BTC-USD",
-            topic=AGENT_INPUT_TOPIC,
+        result = await client.agent(topic=AGENT_INPUT_TOPIC).execute(
+            "Sell 0.2 BTC-USD",
             message_history=result.message_history,
             timeout=30.0,
         )
@@ -484,9 +477,8 @@ async def test_full_trading_session(deploy_client):
         assert account.trade_count == 2
 
         # Check portfolio mentions BTC
-        result = await client.execute_node(
-            user_prompt="Show my portfolio",
-            topic=AGENT_INPUT_TOPIC,
+        result = await client.agent(topic=AGENT_INPUT_TOPIC).execute(
+            "Show my portfolio",
             message_history=result.message_history,
             timeout=30.0,
         )
@@ -509,7 +501,7 @@ async def test_autonomous_portfolio_check_and_trade(deploy_client):
     1. Call get_portfolio — discover BTC position with massive unrealized P&L
     2. Call execute_trade — sell some/all BTC to lock in profits
 
-    Both tool calls occur within a single execute_node() invocation, proving the
+    Both tool calls occur within a single .execute() invocation, proving the
     agent makes multiple autonomous tool calls in one turn.
     """
     client = deploy_client
@@ -542,15 +534,14 @@ async def test_autonomous_portfolio_check_and_trade(deploy_client):
     )
 
     async with TestKafkaBroker(client.broker):
-        await client.execute_node(
-            user_prompt=(
+        await client.agent(topic=AGENT_INPUT_TOPIC).execute(
+            (
                 "Here is the latest ticker information. You should view your "
                 "portfolio first before making any decisions to trade.\n"
                 "price = last traded price, best_bid = price you sell at, "
                 "best_ask = price you buy at.\n\n"
                 f"{ticker_json}"
             ),
-            topic=AGENT_INPUT_TOPIC,
             timeout=45.0,
         )
 

@@ -22,12 +22,12 @@ from calfkit import Client
 from calfkit.models.envelope import Envelope
 from arena.fees import FeeModel
 from arena.price_book import PriceBook
-from exchanges import PRICE_TOPIC, TickerMessage
+from exchanges import AGENT_INPUT_TOPIC, PRICE_TOPIC, TickerMessage
 from exchanges.coinbase import CoinbaseKafkaConnector
 
 pytestmark = pytest.mark.broker
 
-AGENT_TOPIC = "agent_router.input"
+AGENT_TOPIC = AGENT_INPUT_TOPIC
 WAIT_TIMEOUT = 45.0
 
 
@@ -60,7 +60,7 @@ async def client(redpanda_bootstrap):
     try:
         yield c
     finally:
-        await c.close()
+        await c.aclose()
 
 
 # ── Tests ────────────────────────────────────────────────────────

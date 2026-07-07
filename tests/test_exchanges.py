@@ -32,14 +32,25 @@ def _ticker(product_id="BTC-USD", price="50000.00") -> TickerMessage:
     )
 
 
+class _FakeGateway:
+    """A fake calfkit AgentGateway: records .send() calls into a shared sink."""
+
+    def __init__(self, topic, sink):
+        self._topic = topic
+        self._sink = sink
+
+    async def send(self, user_prompt, *, deps=None, **kwargs):
+        self._sink.append({"user_prompt": user_prompt, "topic": self._topic, "deps": deps})
+
+
 class _FakeClient:
-    """Captures invoke_node calls instead of touching a broker."""
+    """Captures agent(topic=...).send(...) invocations instead of touching a broker."""
 
     def __init__(self):
         self.invocations = []
 
-    async def invoke_node(self, *, user_prompt, topic, deps):
-        self.invocations.append({"user_prompt": user_prompt, "topic": topic, "deps": deps})
+    def agent(self, name=None, *, topic=None, output_type=str):
+        return _FakeGateway(topic, self.invocations)
 
 
 # ── Candle / ticker parsing ──────────────────────────────────────
@@ -180,7 +191,7 @@ def _stub_run_env(monkeypatch, module):
 
     class _Client:
         @staticmethod
-        def connect(servers):
+        def connect(servers, **kwargs):  # run() now passes inbox_topic=
             return object()
 
     monkeypatch.setenv("OPENAI_API_KEY", "dummy")  # config.json references it

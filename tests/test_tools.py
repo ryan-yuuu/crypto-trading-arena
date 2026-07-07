@@ -7,6 +7,7 @@ logging, so a lightweight stub context is sufficient (no LLM, no broker).
 
 from __future__ import annotations
 
+import time
 import types
 from datetime import datetime, timezone
 
@@ -157,3 +158,36 @@ def test_get_portfolio_position_without_price_shows_na(seeded_singleton):
     out = _get_portfolio("agent")
     assert "DOGE-USD" in out
     assert "N/A" in out  # current price / mkt value / pnl rendered as N/A
+
+
+# ── execute_trade: latency stopwatch via ctx.deps ────────────────
+#
+# The connector stamps deps={"invoked_at": <time>} on the agent invocation; the
+# tool turns it into a per-fill latency. calfkit 0.12 exposes ToolContext.deps as
+# the producer-supplied Mapping directly (`ctx.deps["k"]`), replacing 0.2's
+# `ctx.deps.provided_deps`.
+
+
+def _exec_ctx(deps: dict) -> types.SimpleNamespace:
+    return types.SimpleNamespace(agent_name="agent", tool_call_id="tc-1", deps=deps)
+
+
+def test_execute_trade_records_latency_from_invoked_at(seeded_singleton, monkeypatch):
+    monkeypatch.setattr(tools.view, "rerender", lambda: None)
+    ctx = _exec_ctx({"invoked_at": time.time() - 0.5})
+
+    msg = tools.execute_trade._tool.function(ctx, "BTC-USD", 0.1, "buy")
+
+    assert msg.startswith("Bought")
+    latency = seeded_singleton.trade_log[-1].latency
+    assert latency is not None and latency >= 0.5
+
+
+def test_execute_trade_latency_none_when_dep_absent(seeded_singleton, monkeypatch):
+    """No invoked_at dep (a manual/test invocation) → latency is None, not a crash."""
+    monkeypatch.setattr(tools.view, "rerender", lambda: None)
+    ctx = _exec_ctx({})
+
+    tools.execute_trade._tool.function(ctx, "BTC-USD", 0.1, "buy")
+
+    assert seeded_singleton.trade_log[-1].latency is None

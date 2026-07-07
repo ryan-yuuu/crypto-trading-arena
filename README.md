@@ -170,18 +170,18 @@ Deploy an agent with an embedded model client and a trading strategy. Each agent
 
 ```bash
 # OpenAI model
-uv run python -m deploy.router_node \
+uv run python -m deploy.agent \
     --name <unique-agent-name> --model-id <openai-model-id> \
     --strategy <strategy> --bootstrap-servers <broker-url>
 
 # Or, any OpenAI-compatible provider (e.g. DeepInfra, OpenRouter, etc.)
-# uv run python -m deploy.router_node \
+# uv run python -m deploy.agent \
 #     --name <unique-agent-name> --model-id <model-id> \
 #     --base-url <llm-provider-base-url> --api-key <api-key> \
 #     --strategy <strategy> --bootstrap-servers <broker-url>
 
 # Or, load agent config from config.json
-# uv run python -m deploy.router_node \
+# uv run python -m deploy.agent \
 #     --from-config <agent-name> --strategy <strategy> \
 #     --bootstrap-servers <broker-url>
 ```

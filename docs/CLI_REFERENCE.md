@@ -66,7 +66,7 @@ For the full config schema with all fields, types, and defaults, see [`config.sc
 
 ---
 
-## deploy/router_node.py
+## deploy/agent.py
 
 Deploy an agent with an embedded model client and trading strategy. Can use explicit CLI args or load from config.
 
@@ -87,18 +87,18 @@ Deploy an agent with an embedded model client and trading strategy. Can use expl
 **Examples:**
 ```bash
 # Explicit configuration
-uv run python -m deploy.router_node \
+uv run python -m deploy.agent \
     --name momentum --model-id gpt-5-nano \
     --strategy momentum --bootstrap-servers localhost:9092 \
     --api-key $OPENAI_API_KEY
 
 # Load from config file
-uv run python -m deploy.router_node \
+uv run python -m deploy.agent \
     --from-config gpt-5-nano --strategy default \
     --bootstrap-servers localhost:9092
 
 # Using OpenRouter (for Claude and other non-OpenAI models)
-uv run python -m deploy.router_node \
+uv run python -m deploy.agent \
     --name claude-agent --model-id anthropic/claude-sonnet-4 \
     --base-url https://openrouter.ai/api/v1 \
     --api-key $OPENROUTER_API_KEY \

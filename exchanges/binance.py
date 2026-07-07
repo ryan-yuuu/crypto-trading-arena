@@ -28,7 +28,7 @@ from calfkit import Client
 from arena.fees import FeeModel
 from arena.models import Candle, TIMEFRAMES
 from arena.price_book import CandleBook, PriceBook
-from exchanges import PRICE_TOPIC, TickerMessage
+from exchanges import AGENT_INPUT_TOPIC, AGENT_OUTPUT_TOPIC, PRICE_TOPIC, TickerMessage
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,6 @@ BINANCE_INTERVAL_MAP = {
     300: "5m",
     900: "15m",
 }
-
-AGENT_INPUT_TOPIC = "agent_router.input"
 
 DEFAULT_SYMBOLS = [
     "BTCUSDT",
@@ -199,7 +197,7 @@ class BinanceKafkaConnector:
 
     Connects to the Binance Exchange WebSocket ticker stream
     and invokes the configured Agent with each price update
-    using fire-and-forget publishes via Client.invoke_node().
+    using fire-and-forget publishes via client.agent(topic=...).send().
 
     When min_publish_interval is set, incoming tickers are buffered per
     symbol. Only the latest data for each symbol is kept. A symbol's
@@ -219,7 +217,10 @@ class BinanceKafkaConnector:
         if not symbols:
             raise ValueError("At least one symbol must be specified")
         self._client = client
-        self._agent_topic = agent_topic
+        # Mint the fan-out gateway once. The topic= escape hatch targets the shared
+        # broadcast topic (all agents subscribe under distinct consumer groups), NOT a
+        # per-agent private topic — see docs/calfkit-0.12-migration.md, constraint #2.
+        self._agent_gw = client.agent(topic=agent_topic)
         self._symbols = symbols
         self._min_interval = min_publish_interval
         self._running = True
@@ -256,7 +257,7 @@ class BinanceKafkaConnector:
                     )
                     await asyncio.sleep(RECONNECT_DELAY_SECONDS)
         finally:
-            await self._client.close()
+            await self._client.aclose()
             logger.info("Kafka broker closed")
 
     def stop(self) -> None:
@@ -329,9 +330,8 @@ class BinanceKafkaConnector:
                 f"{self._candle_book.format_prompt(self._symbols)}"
             )
 
-        await self._client.invoke_node(
-            user_prompt="\n".join(prompt_parts),
-            topic=self._agent_topic,
+        await self._agent_gw.send(
+            "\n".join(prompt_parts),
             deps={"invoked_at": time.time()},
         )
 
@@ -524,7 +524,9 @@ async def run(args: argparse.Namespace, agent_topic: str = AGENT_INPUT_TOPIC) ->
     fee_model = FeeModel(taker_bps=config.trading.fees.taker_bps)
 
     candle_book = CandleBook(parse_row=parse_binance_candle)
-    client = Client.connect(args.bootstrap_servers)
+    # Bind a shared, durable invoker inbox so agent step-events are observable by the
+    # standalone response_viewer via client.events() (Phase 2 topology).
+    client = Client.connect(args.bootstrap_servers, inbox_topic=AGENT_OUTPUT_TOPIC)
     connector = BinanceKafkaConnector(
         client=client,
         agent_topic=agent_topic,

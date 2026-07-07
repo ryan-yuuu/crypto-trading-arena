@@ -4,6 +4,14 @@ from pydantic import BaseModel
 
 PRICE_TOPIC = "market_data.prices"
 
+# Agent-routing topics — the shared fan-out contract. Every agent subscribes to
+# AGENT_INPUT_TOPIC under its own consumer group (so one publish broadcasts to all
+# agents); agent turn events are observed on AGENT_OUTPUT_TOPIC. These names are an
+# on-the-wire contract shared by independently-deployed processes and must stay
+# byte-stable across the whole fleet.
+AGENT_INPUT_TOPIC = "agent_router.input"
+AGENT_OUTPUT_TOPIC = "agent_router.output"
+
 
 class TickerMessage(BaseModel):
     """Ticker message published to Kafka (common schema for all exchanges)."""

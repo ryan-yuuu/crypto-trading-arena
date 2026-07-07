@@ -1,4 +1,4 @@
-"""Unit tests for the strategy registry that deploy/router_node selects from."""
+"""Unit tests for the strategy registry that deploy/agent selects from."""
 
 from __future__ import annotations
 
