@@ -11,9 +11,9 @@
 | arena/price\_book.py    |       62 |       18 |     71% |     50-82 |
 | arena/recorder.py       |       95 |        1 |     99% |       182 |
 | arena/strategies.py     |        2 |        0 |    100% |           |
-| arena/tools.py          |       86 |       16 |     81% |35-45, 136-145, 156-161 |
+| arena/tools.py          |       87 |        4 |     95% |   160-165 |
 | config.py               |       81 |        0 |    100% |           |
-| **TOTAL**               |  **674** |  **109** | **84%** |           |
+| **TOTAL**               |  **675** |   **97** | **86%** |           |
 
 
 ## Setup coverage badge
