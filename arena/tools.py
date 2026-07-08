@@ -137,9 +137,13 @@ def execute_trade(ctx: ToolContext, product_id: str, quantity: float, action: st
         "execute_trade ENTER: agent=%s product=%s qty=%s action=%s tool_call_id=%s",
         ctx.agent_name, product_id, quantity, action, ctx.tool_call_id,
     )
+    # calfkit 0.12 exposes ToolContext.deps as the producer-supplied Mapping directly.
+    # The connector stamps deps={"invoked_at": <time>} on the agent invocation so we can
+    # measure invoke→fill latency; a manual/test invocation omits it (latency stays None).
     latency: float | None = None
-    if isinstance(ctx.deps.provided_deps, dict) and "invoked_at" in ctx.deps.provided_deps:
-        latency = time.time() - ctx.deps.provided_deps["invoked_at"]
+    invoked_at = ctx.deps.get("invoked_at")
+    if invoked_at is not None:
+        latency = time.time() - invoked_at
     result = _execute_trade(ctx.agent_name, product_id, quantity, action, latency=latency)
     log.debug("execute_trade EXIT: agent=%s tool_call_id=%s", ctx.agent_name, ctx.tool_call_id)
     return result

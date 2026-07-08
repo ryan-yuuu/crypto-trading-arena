@@ -1,20 +1,24 @@
-"""Deploy a single named Agent for the daytrading arena.
+"""Deploy a single named trading Agent for the daytrading arena.
+
+Runs one agent per process (launch this module once per agent). Despite the
+``agent_router.*`` topic names, this process does no routing itself — it hosts
+one Agent node (plus its tool nodes) in a Worker.
 
 Each agent subscribes to the shared ``agent_router.input`` topic with its
 own consumer group, so every agent receives every market tick independently.
 The model client is embedded directly in the Agent (no separate ChatNode).
 
 Example:
-    uv run python -m deploy.router_node \
+    uv run python -m deploy.agent \
         --name momentum --strategy momentum \
         --model-id gpt-5-nano --bootstrap-servers <broker-url>
 
-    uv run python -m deploy.router_node \
+    uv run python -m deploy.agent \
         --name brainrot-daytrader --strategy brainrot \
         --model-id deepseek-chat --base-url https://api.deepseek.com/v1 \
         --api-key $DEEPSEEK_API_KEY --bootstrap-servers <broker-url>
 
-    uv run python -m deploy.router_node \
+    uv run python -m deploy.agent \
         --from-config gpt-5-nano --strategy default \
         --bootstrap-servers <broker-url>
 """
@@ -30,6 +34,7 @@ from calfkit import Agent, Client, OpenAIModelClient, Worker
 from arena.tools import calculator, execute_trade, get_portfolio
 from arena.strategies import STRATEGIES
 from config import load_config
+from exchanges import AGENT_INPUT_TOPIC
 
 load_dotenv()
 
@@ -145,7 +150,7 @@ async def main() -> None:
     agent = Agent(
         args.name,
         system_prompt=system_prompt,
-        subscribe_topics="agent_router.input",
+        subscribe_topics=AGENT_INPUT_TOPIC,
         model_client=OpenAIModelClient(
             model_name=args.model_id,
             base_url=args.base_url,
@@ -160,7 +165,7 @@ async def main() -> None:
     print(f"  - Agent:    {args.name}")
     print(f"  - Strategy: {args.strategy}")
     print(f"  - Model:    {args.model_id}")
-    print("  - Input:    agent_router.input")
+    print(f"  - Input:    {AGENT_INPUT_TOPIC}")
     print(f"  - Tools:    {tool_names}")
     if args.base_url:
         print(f"  - Base URL: {args.base_url}")

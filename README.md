@@ -94,11 +94,7 @@ After installation, restart your terminal.
 
 ### 2. Install the Calfkit SDK
 
-```bash
-uv add calfkit@latest
-```
-
-[Calfkit](https://github.com/calf-ai/calfkit-sdk) is the event-stream SDK that powers this project. It handles the agent realtime stream consumption and orechestration.
+[Calfkit](https://github.com/calf-ai/calfkit-sdk) is the event-stream SDK that powers this project — it handles the agents' realtime stream consumption and orchestration. It's already a pinned dependency (`calfkit>=0.12.6,<0.13` in `pyproject.toml`), installed along with everything else by `uv sync` in the [Quickstart](#quickstart) below.
 
 <br>
 
@@ -130,13 +126,20 @@ There's also a [cloud broker](https://github.com/calf-ai/calfkit-sdk?tab=readme-
 
 ## Quickstart
 
-Install dependencies:
+Clone the repo and install dependencies:
 
 ```bash
+git clone https://github.com/ryan-yuuu/crypto-trading-arena && cd crypto-trading-arena
 uv sync
 ```
 
-Then launch each component in its own terminal. All components will access the same broker.
+Add your LLM provider's API key:
+
+```bash
+cp .env.example .env      # then edit .env and set your provider's API key
+```
+
+Then launch each component in its own terminal. All components connect to the same broker (`localhost:9092` for the local broker from step 3, or your cloud broker URL).
 
 <br>
 
@@ -170,18 +173,18 @@ Deploy an agent with an embedded model client and a trading strategy. Each agent
 
 ```bash
 # OpenAI model
-uv run python -m deploy.router_node \
+uv run python -m deploy.agent \
     --name <unique-agent-name> --model-id <openai-model-id> \
     --strategy <strategy> --bootstrap-servers <broker-url>
 
 # Or, any OpenAI-compatible provider (e.g. DeepInfra, OpenRouter, etc.)
-# uv run python -m deploy.router_node \
+# uv run python -m deploy.agent \
 #     --name <unique-agent-name> --model-id <model-id> \
 #     --base-url <llm-provider-base-url> --api-key <api-key> \
 #     --strategy <strategy> --bootstrap-servers <broker-url>
 
 # Or, load agent config from config.json
-# uv run python -m deploy.router_node \
+# uv run python -m deploy.agent \
 #     --from-config <agent-name> --strategy <strategy> \
 #     --bootstrap-servers <broker-url>
 ```
