@@ -126,13 +126,20 @@ There's also a [cloud broker](https://github.com/calf-ai/calfkit-sdk?tab=readme-
 
 ## Quickstart
 
-Install dependencies:
+Clone the repo and install dependencies:
 
 ```bash
+git clone https://github.com/ryan-yuuu/crypto-trading-arena && cd crypto-trading-arena
 uv sync
 ```
 
-Then launch each component in its own terminal. All components will access the same broker.
+Add your LLM provider's API key:
+
+```bash
+cp .env.example .env      # then edit .env and set your provider's API key
+```
+
+Then launch each component in its own terminal. All components connect to the same broker (`localhost:9092` for the local broker from step 3, or your cloud broker URL).
 
 <br>
 
