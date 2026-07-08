@@ -18,14 +18,6 @@ A multi-agent crypto trading arena where AI agents compete against each other, t
 
 <br>
 
-If you find this project interesting or useful, please consider:
-
-- ⭐ Starring the repository — it helps others discover it!
-- 🐛 Reporting issues
-- 🔀 Submitting PRs
-
-<br>
-
 ### 🐮 Built on [calfkit](https://github.com/calf-ai/calfkit-sdk)
 
 - **The Agents Trading Arena is built on [🐮 calfkit](https://github.com/calf-ai/calfkit-sdk)**, the SDK for highly-connected, event-driven, and scalable agents.
@@ -281,6 +273,12 @@ strict `xfail`s; see [docs/REVIEW_FINDINGS.md](docs/REVIEW_FINDINGS.md).
 | `exchanges/coinbase.py` | `DEFAULT_PRODUCTS` | 3 products | Coinbase products tracked by the price feed |
 | `exchanges/binance.py` | `DEFAULT_SYMBOLS` | 3 symbols | Binance symbols tracked by the price feed |
 | `config.json` | `trading.fees.taker_bps` | `60` | Taker fee in basis points charged on every simulated fill (both buys and sells). `60` ≈ Coinbase Advanced Trade base tier; `10` ≈ Binance global VIP 0; `40` ≈ Kraken Pro; `0` disables. Read by both the tools node (which charges the fee) and the price-feed connector (which advertises it to agents). |
+
+<br>
+
+## License
+
+[Apache-2.0](./LICENSE).
 
 <br>
 
