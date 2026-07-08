@@ -1,13 +1,14 @@
-# The Agents Trading Arena 🤖 🤺
+<h1 align="center">🤖 🤺 The Agents Trading Arena</h1>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/ryan-yuuu/crypto-trading-arena/ci.yml?branch=main&style=flat-square&logo=github&label=CI)](https://github.com/ryan-yuuu/crypto-trading-arena/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/ryan-yuuu/crypto-trading-arena/python-coverage-comment-action-data/endpoint.json&style=flat-square)](https://github.com/ryan-yuuu/crypto-trading-arena/tree/python-coverage-comment-action-data)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)](LICENSE)
-[![Discord](https://img.shields.io/discord/1478593215555960902?style=flat-square&logo=discord&label=Discord)](https://discord.gg/Ch3U4VV7Nj)
+<p align="center">
+  <a href="https://github.com/calf-ai/calfkit-sdk"><img src="https://img.shields.io/badge/built%20with-🐮%20agents-6f42c1?style=flat-square" alt="Built with calfkit"></a>
+  <a href="https://github.com/ryan-yuuu/crypto-trading-arena/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ryan-yuuu/crypto-trading-arena/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI"></a>
+  <a href="https://github.com/ryan-yuuu/crypto-trading-arena/tree/python-coverage-comment-action-data"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/ryan-yuuu/crypto-trading-arena/python-coverage-comment-action-data/endpoint.json&style=flat-square" alt="Coverage"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" alt="License"></a>
+  <a href="https://discord.gg/Ch3U4VV7Nj"><img src="https://img.shields.io/discord/1478593215555960902?style=flat-square&logo=discord&label=Discord" alt="Discord"></a>
+</p>
 
 A multi-agent crypto trading arena where AI agents compete against each other, trading with live crypto market data from Coinbase or Binance. Each agent consumes a livestream of ticker data and standard candlestick charts, has access to its portfolio and calculator, and executes trades autonomously. 
-
-This project is built with [Calfkit](https://github.com/calf-ai/calfkit-sdk) agents, namely for their multi-agent orchestration and realtime data streaming functionality.
 
 <br>
 
@@ -22,6 +23,14 @@ If you find this project interesting or useful, please consider:
 - ⭐ Starring the repository — it helps others discover it!
 - 🐛 Reporting issues
 - 🔀 Submitting PRs
+
+<br>
+
+### 🐮 Built on [calfkit](https://github.com/calf-ai/calfkit-sdk)
+
+- **The Agents Trading Arena is built on [🐮 calfkit](https://github.com/calf-ai/calfkit-sdk)**, the SDK for highly-connected, event-driven, and scalable agents.
+
+- **Want to build your own multi-agent system?** Start with the calfkit [quickstart](https://github.com/calf-ai/calfkit-sdk#quickstart) and [examples](https://github.com/calf-ai/calfkit-sdk/blob/main/examples/README.md).
 
 <br>
 
@@ -272,3 +281,12 @@ strict `xfail`s; see [docs/REVIEW_FINDINGS.md](docs/REVIEW_FINDINGS.md).
 | `exchanges/coinbase.py` | `DEFAULT_PRODUCTS` | 3 products | Coinbase products tracked by the price feed |
 | `exchanges/binance.py` | `DEFAULT_SYMBOLS` | 3 symbols | Binance symbols tracked by the price feed |
 | `config.json` | `trading.fees.taker_bps` | `60` | Taker fee in basis points charged on every simulated fill (both buys and sells). `60` ≈ Coinbase Advanced Trade base tier; `10` ≈ Binance global VIP 0; `40` ≈ Kraken Pro; `0` disables. Read by both the tools node (which charges the fee) and the price-feed connector (which advertises it to agents). |
+
+<br>
+
+---
+
+<p align="center">
+  <strong>Built on <a href="https://github.com/calf-ai/calfkit-sdk">🐮 calfkit</a></strong> — the SDK for highly-connected, event-driven, and scalable agents.<br>
+  Building your own multi-agent system? <a href="https://github.com/calf-ai/calfkit-sdk#quickstart">Start with the calfkit quickstart</a> · ⭐ <a href="https://github.com/calf-ai/calfkit-sdk">star the repo</a>
+</p>
